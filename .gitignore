@@ -1,0 +1,41 @@
+# Flutter
+/flutter/.dart_tool/
+/flutter/.idea/
+/flutter/.vscode/
+/flutter/.packages
+/flutter/.flutter-plugins
+/flutter/.flutter-plugins-dependencies
+/flutter/pubspec.lock
+/flutter/build/
+/flutter/ios/Flutter/.last_build_id
+/flutter/ios/Pods/
+/flutter/ios/Flutter/Flutter.framework
+/flutter/ios/Flutter/Generated.xcconfig
+/flutter/android/.gradle/
+/flutter/android/app/build/
+/flutter/android/local.properties
+/flutter/**.log
+/flutter/**.iml
+
+# Node.js backend
+/backend/node_modules/
+/backend/dist/
+/backend/build/
+/backend/.env
+/backend/.env.local
+/backend/.env.development
+/backend/.env.production
+/backend/coverage/
+/backend/.nyc_output/
+/backend/package-lock.json
+/backend/yarn.lock
+/backend/*.log
+/backend/npm-debug.log*
+/backend/yarn-debug.log*
+/backend/yarn-error.log*
+/backend/.vscode/
+/backend/.idea/
+
+# OS
+.DS_Store
+Thumbs.db
