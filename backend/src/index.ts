@@ -3,11 +3,15 @@ import express from 'express';
 import cors from 'cors';
 import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import { pool, testConnection } from './db';
 import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
+import blocksRouter from './routes/blocks';
 import friendsRouter from './routes/friends';
 import usersRouter from './routes/users';
+import messagesRouter from './routes/messages';
 
 dotenv.config();
 
@@ -16,6 +20,15 @@ const PORT = Number(process.env.PORT || 4000);
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// Static uploads (avatars, etc.)
+const uploadsDir = path.join(process.cwd(), 'uploads');
+try {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+} catch {
+  // ignore
+}
+app.use('/uploads', express.static(uploadsDir));
 
 app.get('/health', async (_req, res) => {
   try {
@@ -30,8 +43,10 @@ app.get('/health', async (_req, res) => {
 
 app.use('/auth', authRouter);
 app.use('/events', eventsRouter);
+app.use('/blocks', blocksRouter);
 app.use('/friends', friendsRouter);
 app.use('/users', usersRouter);
+app.use('/messages', messagesRouter);
 
 const server = http.createServer(app);
 

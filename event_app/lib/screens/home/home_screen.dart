@@ -8,14 +8,15 @@ import 'package:geolocator/geolocator.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../models/event.dart';
-import '../services/api_client.dart';
-import '../screens/create_event_details_screen.dart';
-import '../screens/create_event_location_screen.dart';
-import 'event_details_screen.dart';
-import 'friends_screen.dart';
-import 'my_rooms_screen.dart';
-import '../widgets/event_marker_widget.dart';
+import '../../models/event.dart';
+import '../../services/api_client.dart';
+import '../../widgets/event_marker_widget.dart';
+import '../events/create_event_details_screen.dart';
+import '../events/create_event_location_screen.dart';
+import '../events/event_details_screen.dart';
+import '../friends/friends_screen.dart';
+import '../profile/profile_screen.dart';
+import '../rooms/my_rooms_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -64,26 +65,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Event> _parseEventsFromJson(List<dynamic> items) {
     return items.map((raw) {
-        final map = raw as Map<String, dynamic>;
-        return Event(
-          id: map['id'] as String,
-          title: map['title'] as String,
-          description: map['description'] as String? ?? '',
-          lat: (map['lat'] as num).toDouble(),
-          lon: (map['lon'] as num).toDouble(),
-          createdAt: DateTime.parse(map['created_at'] as String),
-          markerColorValue:
-              int.parse(map['marker_color_value'].toString()), // bigint -> string
-          markerIconCodePoint:
-              int.parse(map['marker_icon_code'].toString()),
-          rsvpStatus: 0,
-          goingUsers: const [],
-          notGoingUsers: const [],
-          endsAt: map['ends_at'] != null
-              ? DateTime.parse(map['ends_at'] as String)
-              : null,
-        );
-      }).toList();
+      final map = raw as Map<String, dynamic>;
+      return Event(
+        id: map['id'] as String,
+        title: map['title'] as String,
+        description: map['description'] as String? ?? '',
+        lat: (map['lat'] as num).toDouble(),
+        lon: (map['lon'] as num).toDouble(),
+        createdAt: DateTime.parse(map['created_at'] as String),
+        markerColorValue: int.parse(map['marker_color_value'].toString()),
+        markerIconCodePoint: int.parse(map['marker_icon_code'].toString()),
+        rsvpStatus: 0,
+        goingUsers: const [],
+        notGoingUsers: const [],
+        goingUserProfiles: const [],
+        notGoingUserProfiles: const [],
+        endsAt: map['ends_at'] != null ? DateTime.parse(map['ends_at'] as String) : null,
+      );
+    }).toList();
   }
 
   Timer? _loadEventsDebounce;
@@ -158,10 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ? Center(
                           child: Text(
                             'На текущем экране событий нет',
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(color: Colors.grey),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
                           ),
                         )
                       : ListView.separated(
@@ -190,9 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               title: Text(event.title),
-                              subtitle: Text(
-                                '${event.lat.toStringAsFixed(5)}, ${event.lon.toStringAsFixed(5)}',
-                              ),
+                              subtitle: Text('${event.lat.toStringAsFixed(5)}, ${event.lon.toStringAsFixed(5)}'),
                               onTap: () {
                                 Navigator.of(context).pop();
                                 Navigator.of(this.context).push(
@@ -214,17 +208,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initLocation() async {
-    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
-    LocationPermission permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
-    if (permission == LocationPermission.deniedForever) {
-      return;
-    }
+    if (permission == LocationPermission.deniedForever) return;
 
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
@@ -272,16 +264,14 @@ class _HomeScreenState extends State<HomeScreen> {
         lat: (created['lat'] as num).toDouble(),
         lon: (created['lon'] as num).toDouble(),
         createdAt: DateTime.parse(created['created_at'] as String),
-        markerColorValue:
-            int.parse(created['marker_color_value'].toString()),
-        markerIconCodePoint:
-            int.parse(created['marker_icon_code'].toString()),
+        markerColorValue: int.parse(created['marker_color_value'].toString()),
+        markerIconCodePoint: int.parse(created['marker_icon_code'].toString()),
         rsvpStatus: 0,
         goingUsers: const [],
         notGoingUsers: const [],
-        endsAt: created['ends_at'] != null
-            ? DateTime.parse(created['ends_at'] as String)
-            : null,
+        goingUserProfiles: const [],
+        notGoingUserProfiles: const [],
+        endsAt: created['ends_at'] != null ? DateTime.parse(created['ends_at'] as String) : null,
       );
 
       setState(() {
@@ -382,7 +372,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: FlutterMap(
         mapController: _mapController,
         options: MapOptions(
-          initialCenter: const LatLng(55.751244, 37.618423), // Москва
+          initialCenter: const LatLng(55.751244, 37.618423),
           initialZoom: 11,
           backgroundColor: Colors.transparent,
           interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
@@ -436,19 +426,22 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
+          final navigator = Navigator.of(context);
           final initialCenter = _userPosition ?? _mapController.camera.center;
-          final selected = await Navigator.of(context).push<LatLng>(
+          final selected = await navigator.push<LatLng>(
             MaterialPageRoute(
               builder: (_) => CreateEventLocationScreen(initialCenter: initialCenter),
             ),
           );
+          if (!mounted) return;
           if (selected == null) return;
 
-          final created = await Navigator.of(context).push<Event>(
+          final created = await navigator.push<Event>(
             MaterialPageRoute(
               builder: (_) => CreateEventDetailsScreen(position: selected),
             ),
           );
+          if (!mounted) return;
           if (created == null) return;
 
           await _addEvent(created);
@@ -501,6 +494,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                   icon: const Icon(Icons.people),
                   label: const Text('Мои друзья'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 48,
+                width: double.infinity,
+                child: FilledButton.tonalIcon(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const ProfileScreen(),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.person),
+                  label: const Text('Мой профиль'),
                 ),
               ),
             ],

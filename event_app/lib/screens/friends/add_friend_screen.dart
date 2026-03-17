@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_client.dart';
+import '../../services/api_client.dart';
 
 /// Поиск пользователей и отправка заявки в друзья.
 class AddFriendScreen extends StatefulWidget {
@@ -182,3 +182,4 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     );
   }
 }
+

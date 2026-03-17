@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../services/api_client.dart';
+import '../../services/api_client.dart';
+import '../profile/profile_screen.dart';
 import 'add_friend_screen.dart';
 
 /// Экран «Мои друзья»: входящие заявки и кнопка «Добавить в друзья».
@@ -14,6 +15,7 @@ class FriendsScreen extends StatefulWidget {
 class _FriendsScreenState extends State<FriendsScreen> {
   List<Map<String, dynamic>> _requests = [];
   List<Map<String, dynamic>> _friends = [];
+  final Map<String, Map<String, bool>> _requestRelations = {}; // fromUserId -> rel map
   bool _loading = true;
   String? _error;
 
@@ -30,7 +32,30 @@ class _FriendsScreenState extends State<FriendsScreen> {
         _requests = requests.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _friends = friends.map((e) => Map<String, dynamic>.from(e as Map)).toList();
         _loading = false;
+        _requestRelations.clear();
       });
+
+      // Подгружаем relationship для каждой входящей заявки,
+      // чтобы показать кнопку "подписаться в ответ" / "подписан".
+      for (final r in _requests) {
+        final fromUserId = r['from_user_id'] as String?;
+        if (fromUserId == null || fromUserId.isEmpty) continue;
+        try {
+          final rel = await client.get(
+            '/friends/relationship/$fromUserId',
+            withAuth: true,
+          );
+          if (!mounted) return;
+          setState(() {
+            _requestRelations[fromUserId] = {
+              'isFollowing': rel['isFollowing'] == true,
+              'isFriends': rel['isFriends'] == true,
+            };
+          });
+        } catch (_) {
+          // ignore: relationship is optional for UI
+        }
+      }
     } on ApiException catch (e) {
       setState(() {
         _error = e.statusCode == 401 ? 'Войдите в аккаунт' : e.message;
@@ -44,12 +69,23 @@ class _FriendsScreenState extends State<FriendsScreen> {
     }
   }
 
-  Future<void> _acceptRequest(String requestId) async {
+  Future<void> _toggleSubscribeBack(String toUserId) async {
     try {
-      await ApiClient.instance.post(
-        '/friends/requests/$requestId/accept',
-        withAuth: true,
-      );
+      final rel = _requestRelations[toUserId];
+      final isFollowing = rel?['isFollowing'] == true;
+      if (isFollowing) {
+        await ApiClient.instance.post(
+          '/friends/unsubscribe',
+          body: {'toUserId': toUserId},
+          withAuth: true,
+        );
+      } else {
+        await ApiClient.instance.post(
+          '/friends/subscribe',
+          body: {'toUserId': toUserId},
+          withAuth: true,
+        );
+      }
       _load();
     } on ApiException catch (e) {
       if (mounted) {
@@ -57,20 +93,10 @@ class _FriendsScreenState extends State<FriendsScreen> {
           SnackBar(content: Text(e.message)),
         );
       }
-    }
-  }
-
-  Future<void> _rejectRequest(String requestId) async {
-    try {
-      await ApiClient.instance.post(
-        '/friends/requests/$requestId/reject',
-        withAuth: true,
-      );
-      _load();
-    } on ApiException catch (e) {
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
+          SnackBar(content: Text('Ошибка: $e')),
         );
       }
     }
@@ -140,54 +166,6 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'Заявки в друзья',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (_requests.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            'Нет новых заявок',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.grey,
-                                ),
-                          ),
-                        )
-                      else
-                        ..._requests.map((r) {
-                          final id = r['id'] as String?;
-                          final fromEmail = r['from_email'] as String? ?? '—';
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person),
-                              ),
-                              title: Text(fromEmail),
-                              subtitle: const Text('Хочет добавить вас в друзья'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    onPressed: id != null ? () => _acceptRequest(id) : null,
-                                    icon: const Icon(Icons.check),
-                                    color: Colors.green,
-                                    tooltip: 'Принять',
-                                  ),
-                                  IconButton(
-                                    onPressed: id != null ? () => _rejectRequest(id) : null,
-                                    icon: const Icon(Icons.close),
-                                    color: Colors.red,
-                                    tooltip: 'Отклонить',
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        }),
-                      const SizedBox(height: 24),
-                      Text(
                         'Друзья',
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
@@ -205,13 +183,79 @@ class _FriendsScreenState extends State<FriendsScreen> {
                       else
                         ..._friends.map((f) {
                           final email = f['email'] as String? ?? '—';
+                          final id = f['id'] as String?;
+                          final username = (f['username'] as String?)?.trim();
+                          final displayName = (f['display_name'] as String?)?.trim();
+                          final title = (displayName?.isNotEmpty == true)
+                              ? displayName!
+                              : (username?.isNotEmpty == true ? '@$username' : email);
+                          final subtitle = username?.isNotEmpty == true ? '@$username' : email;
                           return Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
                               leading: const CircleAvatar(
                                 child: Icon(Icons.person),
                               ),
-                              title: Text(email),
+                              title: Text(title),
+                              subtitle: Text(subtitle),
+                              onTap: id == null
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => ProfileScreen(userId: id),
+                                        ),
+                                      );
+                                    },
+                            ),
+                          );
+                        }),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Новые подписчики',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 8),
+                      if (_requests.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          child: Text(
+                            'Нет новых подписчиков',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Colors.grey,
+                                ),
+                          ),
+                        )
+                      else
+                        ..._requests.map((r) {
+                          final fromEmail = r['from_email'] as String? ?? '—';
+                          final fromUserId = r['from_user_id'] as String?;
+                          final rel = (fromUserId == null) ? null : _requestRelations[fromUserId];
+                          final isFollowing = rel?['isFollowing'] == true;
+                          final isFriends = rel?['isFriends'] == true;
+                          return Card(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: ListTile(
+                              leading: const CircleAvatar(
+                                child: Icon(Icons.person),
+                              ),
+                              title: Text(fromEmail),
+                              subtitle: Text(isFriends ? 'Вы друзья' : 'Подписался на вас'),
+                              onTap: fromUserId == null
+                                  ? null
+                                  : () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => ProfileScreen(userId: fromUserId),
+                                        ),
+                                      );
+                                    },
+                              trailing: fromUserId == null
+                                  ? null
+                                  : TextButton(
+                                      onPressed: () => _toggleSubscribeBack(fromUserId),
+                                      child: Text(isFollowing ? 'Подписан' : 'Подписаться в ответ'),
+                                    ),
                             ),
                           );
                         }),
@@ -221,3 +265,4 @@ class _FriendsScreenState extends State<FriendsScreen> {
     );
   }
 }
+

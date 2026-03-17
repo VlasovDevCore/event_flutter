@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
-import '../services/api_client.dart';
-import 'home_screen.dart';
+import '../../services/api_client.dart';
+import '../home/home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -16,12 +16,14 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLogin = true;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _usernameController = TextEditingController();
   bool _loading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _usernameController.dispose();
     super.dispose();
   }
 
@@ -29,6 +31,7 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!_formKey.currentState!.validate()) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
+    final username = _usernameController.text.trim();
 
     setState(() {
       _loading = true;
@@ -42,6 +45,7 @@ class _AuthScreenState extends State<AuthScreen> {
         body: {
           'email': email,
           'password': password,
+          if (!_isLogin && username.isNotEmpty) 'username': username,
         },
       );
 
@@ -51,6 +55,7 @@ class _AuthScreenState extends State<AuthScreen> {
 
       await authBox.put('userId', user['id'] as String);
       await authBox.put('email', user['email'] as String);
+      await authBox.put('username', user['username'] as String?);
       await authBox.put('token', token);
       await authBox.put('isLoggedIn', true);
 
@@ -122,6 +127,27 @@ class _AuthScreenState extends State<AuthScreen> {
                               return null;
                             },
                           ),
+                          if (!_isLogin) ...[
+                            const SizedBox(height: 16),
+                            TextFormField(
+                              controller: _usernameController,
+                              decoration: const InputDecoration(
+                                labelText: 'Логин (username)',
+                                border: OutlineInputBorder(),
+                              ),
+                              textInputAction: TextInputAction.next,
+                              validator: (value) {
+                                if (_isLogin) return null;
+                                final v = value?.trim() ?? '';
+                                if (v.isEmpty) return 'Введите логин';
+                                if (v.length < 3) return 'Минимум 3 символа';
+                                if (v.length > 24) return 'Максимум 24 символа';
+                                final ok = RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v);
+                                if (!ok) return 'Только латиница, цифры и _';
+                                return null;
+                              },
+                            ),
+                          ],
                           const SizedBox(height: 16),
                           TextFormField(
                             controller: _passwordController,
@@ -163,6 +189,7 @@ class _AuthScreenState extends State<AuthScreen> {
                             onPressed: () {
                               setState(() {
                                 _isLogin = !_isLogin;
+                                _usernameController.clear();
                               });
                             },
                             child: Text(

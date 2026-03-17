@@ -96,7 +96,7 @@ router.get('/:id', async (req, res) => {
 
     const going = await client.query(
       `
-      SELECT u.email
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = 1
@@ -106,7 +106,7 @@ router.get('/:id', async (req, res) => {
     );
     const notGoing = await client.query(
       `
-      SELECT u.email
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = -1
@@ -115,8 +115,8 @@ router.get('/:id', async (req, res) => {
       [id],
     );
 
-    (event as Record<string, unknown>).going_users = going.rows.map((r) => (r as { email: string }).email);
-    (event as Record<string, unknown>).not_going_users = notGoing.rows.map((r) => (r as { email: string }).email);
+    (event as Record<string, unknown>).going_users = going.rows;
+    (event as Record<string, unknown>).not_going_users = notGoing.rows;
 
     return res.json(event);
   } catch (err) {
@@ -160,17 +160,21 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const going = await client.query(
-      `SELECT u.email FROM event_rsvp r JOIN users u ON u.id = r.user_id WHERE r.event_id = $1 AND r.status = 1 ORDER BY r.updated_at ASC`,
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url
+       FROM event_rsvp r JOIN users u ON u.id = r.user_id
+       WHERE r.event_id = $1 AND r.status = 1 ORDER BY r.updated_at ASC`,
       [eventId],
     );
     const notGoing = await client.query(
-      `SELECT u.email FROM event_rsvp r JOIN users u ON u.id = r.user_id WHERE r.event_id = $1 AND r.status = -1 ORDER BY r.updated_at ASC`,
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url
+       FROM event_rsvp r JOIN users u ON u.id = r.user_id
+       WHERE r.event_id = $1 AND r.status = -1 ORDER BY r.updated_at ASC`,
       [eventId],
     );
 
     return res.json({
-      going_users: going.rows.map((r) => (r as { email: string }).email),
-      not_going_users: notGoing.rows.map((r) => (r as { email: string }).email),
+      going_users: going.rows,
+      not_going_users: notGoing.rows,
     });
   } catch (err) {
     // eslint-disable-next-line no-console

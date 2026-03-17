@@ -56,6 +56,13 @@ class _AddEventDialogState extends State<AddEventDialog> {
       lat: _position!.latitude,
       lon: _position!.longitude,
       createdAt: DateTime.now(),
+      markerColorValue: 0xFF2196F3,
+      markerIconCodePoint: 0xE1C7, // Icons.flutter_dash
+      rsvpStatus: 0,
+      goingUsers: const [],
+      notGoingUsers: const [],
+      goingUserProfiles: const [],
+      notGoingUserProfiles: const [],
     );
 
     Navigator.of(context).pop(event);

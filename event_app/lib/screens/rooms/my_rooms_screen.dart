@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import '../models/event.dart';
-import '../services/api_client.dart';
-import 'event_chat_screen.dart';
-import 'event_details_screen.dart';
+import '../../models/event.dart';
+import '../../services/api_client.dart';
+import '../chat/event_chat_screen.dart';
+import '../events/event_details_screen.dart';
 
 /// Список комнат (событий), где пользователь участвует (RSVP «приду»).
 /// По нажатию открывается чат; после окончания события чат остаётся.
@@ -100,9 +100,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen> {
                       child: Text(
                         'Вы пока не участвуете ни в одном событии.\nОтметьте «Я приду» в деталях события.',
                         textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.grey,
-                            ),
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.grey),
                       ),
                     )
                   : ListView.separated(
@@ -110,8 +108,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen> {
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (context, index) {
                         final event = _rooms[index];
-                        final isEnded = event.endsAt != null &&
-                            event.endsAt!.isBefore(DateTime.now());
+                        final isEnded = event.endsAt != null && event.endsAt!.isBefore(DateTime.now());
                         return ListTile(
                           leading: CircleAvatar(
                             backgroundColor: Color(event.markerColorValue),
@@ -155,3 +152,4 @@ class _MyRoomsScreenState extends State<MyRoomsScreen> {
     );
   }
 }
+

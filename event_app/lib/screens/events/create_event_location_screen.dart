@@ -3,7 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../widgets/event_marker_widget.dart';
+import '../../widgets/event_marker_widget.dart';
 
 class CreateEventLocationScreen extends StatefulWidget {
   const CreateEventLocationScreen({
@@ -14,8 +14,7 @@ class CreateEventLocationScreen extends StatefulWidget {
   final LatLng initialCenter;
 
   @override
-  State<CreateEventLocationScreen> createState() =>
-      _CreateEventLocationScreenState();
+  State<CreateEventLocationScreen> createState() => _CreateEventLocationScreenState();
 }
 
 class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
@@ -43,7 +42,6 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
           onPositionChanged: (position, hasGesture) {
             if (!hasGesture) return;
             final center = position.center;
-            if (center == null) return;
             _selected = center;
           },
         ),
@@ -71,8 +69,7 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
           child: SizedBox(
             height: 48,
             child: FilledButton(
-              onPressed:
-                  _selected == null ? null : () => Navigator.of(context).pop(_selected),
+              onPressed: _selected == null ? null : () => Navigator.of(context).pop(_selected),
               child: const Text('Далее'),
             ),
           ),

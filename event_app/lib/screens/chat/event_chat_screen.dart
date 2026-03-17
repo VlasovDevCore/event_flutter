@@ -3,10 +3,10 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 
-import '../models/event.dart';
-import '../models/event_message.dart';
-import '../services/api_client.dart';
-import 'event_details_screen.dart';
+import '../../models/event.dart';
+import '../../models/event_message.dart';
+import '../../services/api_client.dart';
+import '../events/event_details_screen.dart';
 
 /// Чат события. Доступен только участникам (RSVP «приду»).
 /// После окончания события чат остаётся.
@@ -44,9 +44,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
         '/events/${widget.event.id}/messages',
         withAuth: true,
       );
-      final messages = list
-          .map((e) => EventMessage.fromApi(e as Map<String, dynamic>))
-          .toList();
+      final messages = list.map((e) => EventMessage.fromApi(e as Map<String, dynamic>)).toList();
       setState(() {
         _messages = messages;
         _loading = false;
@@ -98,7 +96,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
         body: {'text': text},
         withAuth: true,
       );
-      final msg = EventMessage.fromApi(data as Map<String, dynamic>);
+      final msg = EventMessage.fromApi(data);
       setState(() {
         _sending = false;
         if (!_messages.any((m) => m.id == msg.id)) {
@@ -112,9 +110,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.statusCode == 403
-                  ? 'Вы не участвуете в этом событии'
-                  : e.message,
+              e.statusCode == 403 ? 'Вы не участвуете в этом событии' : e.message,
             ),
           ),
         );
@@ -136,16 +132,13 @@ class _EventChatScreenState extends State<EventChatScreen> {
     try {
       _socket = io.io(
         ApiClient.baseUrl,
-        io.OptionBuilder()
-            .setTransports(['websocket', 'polling'])
-            .enableAutoConnect()
-            .build(),
+        io.OptionBuilder().setTransports(['websocket', 'polling']).enableAutoConnect().build(),
       );
       _socket!.connect();
       _socket!.emit('joinEvent', widget.event.id);
       _socket!.on('newMessage', (data) {
         if (!mounted) return;
-        final map = data is Map ? Map<String, dynamic>.from(data as Map) : null;
+        final map = data is Map ? Map<String, dynamic>.from(data) : null;
         if (map == null) return;
         final msg = EventMessage.fromApi(map);
         if (_messages.any((m) => m.id == msg.id)) return;
@@ -250,9 +243,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
                               const SizedBox(height: 2),
                               Text(
                                 dateFormat.format(msg.createdAt),
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                      color: Colors.grey,
-                                    ),
+                                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.grey),
                               ),
                             ],
                           ),
@@ -300,3 +291,4 @@ class _EventChatScreenState extends State<EventChatScreen> {
     );
   }
 }
+
