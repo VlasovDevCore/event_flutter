@@ -47,7 +47,9 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
         ),
         children: [
           TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+            urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            subdomains: const ['a', 'b', 'c', 'd'],
+            retinaMode: true,
             userAgentPackageName: 'com.example.event_app',
             tileProvider: CancellableNetworkTileProvider(),
           ),
@@ -56,8 +58,8 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
               child: const EventMarkerWidget(
                 color: Colors.blue,
                 icon: Icons.flutter_dash,
-                size: 44,
-                iconSize: 22,
+                size: 50,
+                iconSize: 24,
               ),
             ),
           ),

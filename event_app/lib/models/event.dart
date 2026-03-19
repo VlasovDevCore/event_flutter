@@ -132,6 +132,7 @@ class EventUserProfile {
     required this.username,
     required this.displayName,
     required this.avatarUrl,
+    this.status = 1,
   });
 
   factory EventUserProfile.fromApiMap(Map<String, dynamic> map) {
@@ -141,6 +142,7 @@ class EventUserProfile {
       username: map['username']?.toString(),
       displayName: (map['display_name'] ?? map['displayName'])?.toString(),
       avatarUrl: (map['avatar_url'] ?? map['avatarUrl'])?.toString(),
+      status: int.tryParse((map['status'] ?? map['rsvp_status'] ?? 1).toString()) ?? 1,
     );
   }
 
@@ -151,6 +153,7 @@ class EventUserProfile {
       username: map['username']?.toString(),
       displayName: map['displayName']?.toString(),
       avatarUrl: map['avatarUrl']?.toString(),
+      status: int.tryParse((map['status'] ?? map['rsvpStatus'] ?? 1).toString()) ?? 1,
     );
   }
 
@@ -160,6 +163,7 @@ class EventUserProfile {
         'username': username,
         'displayName': displayName,
         'avatarUrl': avatarUrl,
+        'status': status,
       };
 
   final String id;
@@ -167,5 +171,7 @@ class EventUserProfile {
   final String? username;
   final String? displayName;
   final String? avatarUrl;
+  /// 1 = иду, -1 = не иду, 0 = без статуса
+  final int status;
 }
 

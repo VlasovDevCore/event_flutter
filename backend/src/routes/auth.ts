@@ -48,7 +48,7 @@ router.post('/register', async (req, res) => {
 
     const hash = await bcrypt.hash(password, 10);
     const insert = await client.query(
-      'INSERT INTO users (email, password_hash, username) VALUES ($1, $2, $3) RETURNING id, email, username, created_at',
+      'INSERT INTO users (email, password_hash, username) VALUES ($1, $2, $3) RETURNING id, email, username, status, created_at',
       [email, hash, normalizedUsername ?? null],
     );
 
@@ -76,7 +76,7 @@ router.post('/login', async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query(
-      'SELECT id, email, username, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, username, status, password_hash FROM users WHERE email = $1',
       [email],
     );
     if (result.rowCount === 0) {
@@ -94,7 +94,12 @@ router.post('/login', async (req, res) => {
     });
 
     return res.json({
-      user: { id: user.id, email: user.email, username: user.username ?? null },
+      user: {
+        id: user.id,
+        email: user.email,
+        username: user.username ?? null,
+        status: user.status,
+      },
       token,
     });
   } catch (err) {

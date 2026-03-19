@@ -24,6 +24,7 @@ class ProfileMe {
   const ProfileMe({
     required this.email,
     required this.username,
+    required this.status,
     required this.displayName,
     required this.bio,
     required this.birthDate,
@@ -55,6 +56,7 @@ class ProfileMe {
     return ProfileMe(
       email: (map['email'] as String?)?.trim(),
       username: (map['username'] as String?)?.trim(),
+      status: parseInt(map['status']) ?? 1,
       displayName:
           (map['display_name'] as String?)?.trim() ?? (map['displayName'] as String?)?.trim(),
       bio: (map['bio'] as String?)?.trim(),
@@ -69,6 +71,7 @@ class ProfileMe {
 
   final String? email;
   final String? username;
+  final int status;
   final String? displayName;
   final String? bio;
   final String? birthDate; // YYYY-MM-DD

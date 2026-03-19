@@ -1,0 +1,228 @@
+import 'package:flutter/material.dart';
+
+import '../../../config/event_marker_catalog.dart';
+import '../../../models/event.dart';
+import 'event_preview_participants_row.dart';
+import 'preview_participant.dart';
+
+class EventPreviewCard extends StatelessWidget {
+  const EventPreviewCard({
+    super.key,
+    required this.event,
+    required this.previewLoading,
+    required this.remainingLabel,
+    required this.iconLabel,
+    required this.markerColor,
+    required this.participants,
+    required this.totalGoing,
+    required this.isGoing,
+    required this.onRsvpToggle,
+    required this.onOpenDetails,
+  });
+
+  final Event event;
+  final bool previewLoading;
+  final String? remainingLabel;
+  final String? iconLabel;
+  final Color markerColor;
+  final List<PreviewParticipant> participants;
+  final int totalGoing;
+  final bool isGoing;
+  final VoidCallback onOpenDetails;
+  final void Function(int status) onRsvpToggle;
+
+  String _hexColor(Color color) {
+    final value = color.toARGB32() & 0xFFFFFF;
+    return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1C1F26).withOpacity(0.96),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: const Color(0xFF23262C),
+            width: 1.5,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.35),
+              blurRadius: 22,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF3A2023),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: const Text(
+                    'СОБЫТИЕ',
+                    style: TextStyle(
+                      color: Color(0xFFFF8A8A),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.6,
+                    ),
+                  ),
+                ),
+                const Spacer(),
+                if (remainingLabel != null)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time_rounded,
+                        size: 14,
+                        color: Color(0xFFB5BBC7),
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        remainingLabel!,
+                        style: const TextStyle(
+                          color: Color(0xFFB5BBC7),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              event.title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (event.description.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                event.description,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Color(0xFFB5BBC7),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+            if (iconLabel != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Container(
+                    width: 28,
+                    height: 28,
+                    decoration: BoxDecoration(
+                      color: markerColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: const Color(0xFF23262C),
+                        width: 1.2,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      IconData(
+                        event.markerIconCodePoint,
+                        fontFamily: 'MaterialIcons',
+                      ),
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Категория: $iconLabel',
+                          style: const TextStyle(
+                            color: Color(0xFFB5BBC7),
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Фон: ${_hexColor(markerColor)} • Иконка: ${_hexColor(EventMarkerCatalog.defaultIconColor)}',
+                          style: const TextStyle(
+                            color: Color(0xFF8F96A7),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              'Придут: ${previewLoading ? '...' : totalGoing}',
+              style: const TextStyle(
+                color: Color(0xFFB5BBC7),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (previewLoading || totalGoing > 0)
+              EventPreviewParticipantsRow(
+                participants: participants,
+                totalGoing: totalGoing,
+                previewLoading: previewLoading,
+              ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor:
+                          isGoing ? const Color(0xFFFF8A8A) : const Color(0xFF36D3F0),
+                      foregroundColor: const Color(0xFF021018),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                    ),
+                    onPressed: () => onRsvpToggle(isGoing ? -1 : 1),
+                    child: Text(isGoing ? 'Не приду' : 'Я приду'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                IconButton(
+                  style: IconButton.styleFrom(
+                    backgroundColor: const Color(0xFF151922),
+                    foregroundColor: const Color(0xFFDFE3EC),
+                  ),
+                  icon: const Icon(Icons.open_in_full_rounded),
+                  onPressed: onOpenDetails,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+

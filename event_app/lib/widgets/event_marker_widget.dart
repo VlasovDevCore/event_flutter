@@ -5,9 +5,9 @@ class EventMarkerWidget extends StatelessWidget {
     super.key,
     required this.color,
     required this.icon,
-    this.size = 32,
-    this.iconSize = 18,
-    this.showPinTail = true,
+    this.size = 50,
+    this.iconSize = 24,
+    this.showPinTail = false,
   });
 
   final Color color;
@@ -27,11 +27,16 @@ class EventMarkerWidget extends StatelessWidget {
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
+            border: Border.all(
+              color: const Color(0xFF23262C),
+              width: 2,
+            ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
+                color: color.withOpacity(0.45),
+                blurRadius: 14,
+                spreadRadius: 2,
+                offset: const Offset(0, 5),
               ),
             ],
           ),

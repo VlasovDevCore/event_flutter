@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../config/event_marker_catalog.dart';
 import '../../models/event.dart';
 import '../../widgets/event_marker_widget.dart';
 
@@ -23,36 +25,21 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
   final _descriptionController = TextEditingController();
   late Color _selectedColor;
   late IconData _selectedIcon;
+  late int _userStatus;
 
-  final _colors = <Color>[
-    Colors.blue,
-    Colors.red,
-    Colors.green,
-    Colors.orange,
-    Colors.purple,
-    Colors.teal,
-    Colors.pink,
-    Colors.indigo,
-  ];
-
-  final _icons = <IconData>[
-    Icons.flutter_dash,
-    Icons.music_note,
-    Icons.sports_soccer,
-    Icons.restaurant,
-    Icons.coffee,
-    Icons.movie,
-    Icons.celebration,
-    Icons.hiking,
-    Icons.beach_access,
-    Icons.pets,
-  ];
+  final _colors = EventMarkerCatalog.availableColors;
+  late List<IconData> _icons;
 
   DateTime? _endsAt;
 
   @override
   void initState() {
     super.initState();
+    _userStatus = (Hive.box('authBox').get('status') as int?) ?? 1;
+    _icons = EventMarkerCatalog.availableIconsForUserStatus(_userStatus);
+    if (_icons.isEmpty) {
+      _icons = EventMarkerCatalog.availableIconsForUserStatus(1);
+    }
     _selectedColor = _colors.first;
     _selectedIcon = _icons.first;
   }
@@ -172,6 +159,15 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
             ),
             const SizedBox(height: 12),
             Text('Иконка', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              _userStatus >= 2
+                  ? 'Доступны иконки статуса 1 и 2'
+                  : 'Доступны иконки статуса 1',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.grey,
+                  ),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,

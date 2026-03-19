@@ -68,6 +68,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
       `
       SELECT id,
              email,
+             status,
              username,
              display_name,
              bio,
@@ -118,7 +119,7 @@ router.post(
     try {
       const result = await client.query(
         `UPDATE users SET avatar_url = $1 WHERE id = $2
-         RETURNING id, email, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, created_at`,
+         RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, created_at`,
         [relativeUrl, userId],
       );
       return res.json(result.rows[0]);
@@ -283,7 +284,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
       UPDATE users
       SET ${sets}
       WHERE id = $${fields.length + 1}
-      RETURNING id, email, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, allow_messages_from_non_friends, created_at
+      RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, allow_messages_from_non_friends, created_at
       `,
       values,
     );
@@ -359,7 +360,7 @@ router.get('/search', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await client.query(
       `
-      SELECT u.id, u.email
+      SELECT u.id, u.email, u.status
       FROM users u
       WHERE u.id != $1
         AND ($2 = '' OR u.email ILIKE $3)
@@ -444,6 +445,7 @@ router.get('/:id', async (req, res) => {
       `
       SELECT id,
              email,
+             status,
              username,
              display_name,
              bio,

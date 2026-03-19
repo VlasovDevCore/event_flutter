@@ -101,6 +101,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final box = Hive.box('authBox');
     await box.put('username', me.username);
     await box.put('email', me.email);
+    await box.put('status', me.status);
     await box.put('displayName', me.displayName);
     await box.put('bio', me.bio);
     await box.put('birthDate', me.birthDate);

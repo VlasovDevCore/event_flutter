@@ -56,6 +56,7 @@ class _AuthScreenState extends State<AuthScreen> {
       await authBox.put('userId', user['id'] as String);
       await authBox.put('email', user['email'] as String);
       await authBox.put('username', user['username'] as String?);
+      await authBox.put('status', (user['status'] as num?)?.toInt() ?? 1);
       await authBox.put('token', token);
       await authBox.put('isLoggedIn', true);
 
