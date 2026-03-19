@@ -9,6 +9,9 @@ import '../../services/api_client.dart';
 import '../chat/direct_chat_screen.dart';
 import 'profile_avatar.dart';
 import 'profile_models.dart';
+import 'profile_qr_screen.dart';
+import 'widgets/profile_edit_sheet_content.dart';
+import 'widgets/avatar_crop_dialog.dart';
 import 'widgets/stat_tile.dart';
 
 class _Relationship {
@@ -154,14 +157,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Color _avatarColorOrDefault() {
     final v = _avatarColorValue();
     return v == null ? Colors.blue : Color(v);
-  }
-
-  IconData _avatarIconOrDefault() {
-    final cp = _avatarIconCodePoint();
-    return IconData(
-      cp ?? Icons.person.codePoint,
-      fontFamily: 'MaterialIcons',
-    );
   }
 
   Future<void> _openEditSheet() async {
@@ -451,262 +446,95 @@ class _ProfileScreenState extends State<ProfileScreen> {
             return StatefulBuilder(
               builder: (context, setSheetState) {
                 sheetSetState = setSheetState;
-                final email = _email() ?? '';
-                final avatarColor = Color(avatarColorValue);
-                final avatarIcon = IconData(
-                  avatarIconCodePoint,
-                  fontFamily: 'MaterialIcons',
-                );
-                final fullAvatarUrl = resolveAvatarUrl(avatarUrl);
-                final statusColor = _savingProfile
-                    ? Colors.grey
-                    : (lastSaveMessage == null
-                        ? Colors.grey
-                        : (lastSaveOk ? Colors.green : Theme.of(context).colorScheme.error));
-
-                return ListView(
-                  controller: scrollController,
-                  padding: EdgeInsets.fromLTRB(
+                return ProfileEditSheetContent(
+                  email: _email() ?? '',
+                  avatarColorValue: avatarColorValue,
+                  avatarUrl: avatarUrl,
+                  savingProfile: _savingProfile,
+                  lastSaveMessage: lastSaveMessage,
+                  lastSaveOk: lastSaveOk,
+                  usernameController: usernameController,
+                  displayNameController: displayNameController,
+                  bioController: bioController,
+                  birthDate: birthDate,
+                  gender: gender,
+                  allowMessagesFromNonFriends: allowMessagesFromNonFriends,
+                  scrollController: scrollController,
+                  sheetPadding: EdgeInsets.fromLTRB(
                     16,
                     8,
                     16,
                     16 + MediaQuery.of(context).viewInsets.bottom,
                   ),
-                  children: [
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 28,
-                          backgroundColor: avatarColor,
-                          backgroundImage: fullAvatarUrl == null ? null : NetworkImage(fullAvatarUrl),
-                          child: fullAvatarUrl != null ? null : Icon(avatarIcon, color: Colors.white),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Редактирование профиля',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _savingProfile ? 'Сохраняю...' : (lastSaveMessage ?? 'Email пока под вопросом'),
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: statusColor),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Аватар', style: Theme.of(context).textTheme.titleSmall),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton.tonalIcon(
-                        onPressed: _savingProfile
-                            ? null
-                            : () async {
-                                final messenger = ScaffoldMessenger.of(context);
-                                final picker = ImagePicker();
-                                final picked = await picker.pickImage(
-                                  source: ImageSource.gallery,
-                                  maxWidth: 1024,
-                                  maxHeight: 1024,
-                                  imageQuality: 85,
-                                );
-                                if (picked == null) return;
-                                try {
-                                  setState(() => _savingProfile = true);
-                                  final bytes = await picked.readAsBytes();
-                                  final data = await ApiClient.instance.uploadImage(
-                                    '/users/me/avatar',
-                                    withAuth: true,
-                                    bytes: bytes,
-                                    filename: picked.name.isNotEmpty ? picked.name : 'avatar.jpg',
-                                  );
-                                  final me = ProfileMe.fromApi(data);
-                                  await box.put('avatarUrl', me.avatarUrl);
-                                  if (mounted) {
-                                    setState(() {
-                                      avatarUrl = me.avatarUrl;
-                                    });
-                                    setSheetState(() {});
-                                  }
-                                } on ApiException catch (e) {
-                                  if (mounted) {
-                                    messenger.showSnackBar(
-                                      SnackBar(content: Text(e.message)),
-                                    );
-                                  }
-                                } catch (e) {
-                                  if (mounted) {
-                                    messenger.showSnackBar(
-                                      SnackBar(content: Text('Ошибка загрузки: $e')),
-                                    );
-                                  }
-                                } finally {
-                                  if (mounted) setState(() => _savingProfile = false);
-                                }
-                              },
-                        icon: const Icon(Icons.photo),
-                        label: const Text('Загрузить фото'),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        for (final c in avatarPalette)
-                          InkWell(
-                            onTap: () {
-                              setSheetState(() => avatarColorValue = c.toARGB32());
-                              schedulePersist();
-                            },
-                            borderRadius: BorderRadius.circular(999),
-                            child: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: c,
-                              child: avatarColorValue == c.toARGB32()
-                                  ? const Icon(Icons.check, color: Colors.white, size: 18)
-                                  : null,
-                            ),
-                          ),
-                        const SizedBox(width: 8),
-                        for (final icon in avatarIcons)
-                          InkWell(
-                            onTap: () {
-                              setSheetState(() => avatarIconCodePoint = icon.codePoint);
-                              schedulePersist();
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: Container(
-                              width: 44,
-                              height: 44,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                borderRadius: BorderRadius.circular(12),
-                                border: Border.all(
-                                  color: avatarIconCodePoint == icon.codePoint
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
-                              ),
-                              child: Icon(icon),
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: usernameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Никнейм (username)',
-                        hintText: 'ivan_123',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: displayNameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Имя',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: bioController,
-                      decoration: const InputDecoration(
-                        labelText: 'О себе',
-                        border: OutlineInputBorder(),
-                      ),
-                      maxLines: 4,
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            onTap: () async {
-                              await openBirthDateNumericSheet(
-                                sheetContext: context,
-                                setBirthDate: (v) {
-                                  if (v == null) return;
-                                  setSheetState(() => birthDate = v);
-                                  schedulePersist();
-                                },
-                              );
-                            },
-                            borderRadius: BorderRadius.circular(12),
-                            child: InputDecorator(
-                              decoration: const InputDecoration(
-                                labelText: 'Дата рождения',
-                                border: OutlineInputBorder(),
-                              ),
-                              child: Text(birthDate ?? 'Не указано'),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: DropdownButtonFormField<String>(
-                            initialValue: (gender == null || gender!.isEmpty) ? null : gender,
-                            items: const [
-                              DropdownMenuItem(value: 'male', child: Text('Мужской')),
-                              DropdownMenuItem(value: 'female', child: Text('Женский')),
-                              DropdownMenuItem(value: 'other', child: Text('Другое')),
-                            ],
-                            decoration: const InputDecoration(
-                              labelText: 'Пол',
-                              border: OutlineInputBorder(),
-                            ),
-                            onChanged: (v) {
-                              setSheetState(() => gender = v);
-                              schedulePersist();
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      enabled: false,
-                      decoration: InputDecoration(
-                        labelText: 'Email',
-                        hintText: email.isEmpty ? '—' : email,
-                        border: const OutlineInputBorder(),
-                        hintStyle: const TextStyle(color: Colors.grey),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Разрешать сообщения не друзьям'),
-                      value: allowMessagesFromNonFriends,
-                      onChanged: _savingProfile
-                          ? null
-                          : (v) {
-                              setSheetState(() => allowMessagesFromNonFriends = v);
-                              schedulePersist();
-                            },
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () => Navigator.of(context).pop(),
-                            child: const Text('Закрыть'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
+                  onPickAvatar: () async {
+                    final messenger = ScaffoldMessenger.of(context);
+                    final picker = ImagePicker();
+                    final picked = await picker.pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 1024,
+                      maxHeight: 1024,
+                      imageQuality: 85,
+                    );
+                    if (picked == null) return;
+                    try {
+                      setState(() => _savingProfile = true);
+                      final rawBytes = await picked.readAsBytes();
+                      if (!context.mounted) return;
+                      final cropped = await showDialog<Uint8List?>(
+                        context: context,
+                                    builder: (dialogContext) => AvatarCropDialog(bytes: rawBytes),
+                      );
+                      if (cropped == null) return;
+
+                      final data = await ApiClient.instance.uploadImage(
+                        '/users/me/avatar',
+                        withAuth: true,
+                        bytes: cropped,
+                        filename: 'avatar.png',
+                      );
+                      final me = ProfileMe.fromApi(data);
+                      await box.put('avatarUrl', me.avatarUrl);
+                      if (mounted) {
+                        setState(() {
+                          avatarUrl = me.avatarUrl;
+                        });
+                        setSheetState(() {});
+                      }
+                    } on ApiException catch (e) {
+                      if (mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text(e.message)),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        messenger.showSnackBar(
+                          SnackBar(content: Text('Ошибка загрузки: $e')),
+                        );
+                      }
+                    } finally {
+                      if (mounted) setState(() => _savingProfile = false);
+                    }
+                  },
+                  onPickBirthDate: () async {
+                    await openBirthDateNumericSheet(
+                      sheetContext: context,
+                      setBirthDate: (v) {
+                        if (v == null) return;
+                        setSheetState(() => birthDate = v);
+                        schedulePersist();
+                      },
+                    );
+                  },
+                  onGenderChanged: (v) {
+                    setSheetState(() => gender = v);
+                    schedulePersist();
+                  },
+                  onAllowMessagesFromNonFriendsChanged: (v) {
+                    setSheetState(() => allowMessagesFromNonFriends = v);
+                    schedulePersist();
+                  },
+                  onClose: () => Navigator.of(context).pop(),
                 );
               },
             );
@@ -740,6 +568,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.edit),
+                ),
+                IconButton(
+                  tooltip: 'QR код профиля',
+                  onPressed: _savingProfile
+                      ? null
+                      : () {
+                          final myId = Hive.box('authBox').get('userId') as String?;
+                          if (myId == null || myId.trim().isEmpty) return;
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => ProfileQrScreen(
+                                userId: myId.trim(),
+                                buildProfileScreen: (scannedId) => ProfileScreen(userId: scannedId),
+                              ),
+                            ),
+                          );
+                        },
+                  icon: const Icon(Icons.qr_code),
                 ),
               ]
             : null,
@@ -1095,7 +941,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       : NetworkImage(resolveAvatarUrl(_avatarUrl())!),
                   child: resolveAvatarUrl(_avatarUrl()) != null
                       ? null
-                      : Icon(_avatarIconOrDefault(), color: Colors.white),
+                      : const Icon(Icons.person, color: Colors.white),
                 ),
                 const SizedBox(width: 16),
                 Expanded(

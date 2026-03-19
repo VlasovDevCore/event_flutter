@@ -48,6 +48,24 @@ app.use('/friends', friendsRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
 
+// Always return JSON errors to the mobile app.
+// Otherwise Express default 404/500 responses are HTML and the client fails with FormatException.
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Not found' });
+});
+
+app.use((err: unknown, _req: any, res: any, _next: any) => {
+  const message =
+    err instanceof Error
+      ? err.message
+      : typeof err === 'string'
+        ? err
+        : 'Internal error';
+  // eslint-disable-next-line no-console
+  console.error(err);
+  res.status(500).json({ error: message });
+});
+
 const server = http.createServer(app);
 
 const io = new SocketIOServer(server, {

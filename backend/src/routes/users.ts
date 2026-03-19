@@ -7,16 +7,30 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
-const avatarsDir = path.join(process.cwd(), 'uploads', 'avatars');
+const avatarsBaseDir = path.join(process.cwd(), 'uploads', 'avatars');
+const uploadsDir = path.join(process.cwd(), 'uploads');
 try {
-  fs.mkdirSync(avatarsDir, { recursive: true });
+  fs.mkdirSync(avatarsBaseDir, { recursive: true });
 } catch {
   // ignore
 }
 
+function todayFolderName() {
+  // YYYY-MM-DD (UTC), чтобы имя папки было консистентным
+  return new Date().toISOString().slice(0, 10);
+}
+
 const uploadAvatar = multer({
   storage: multer.diskStorage({
-    destination: (_req, _file, cb) => cb(null, avatarsDir),
+    destination: (_req, _file, cb) => {
+      const dayDir = path.join(avatarsBaseDir, todayFolderName());
+      try {
+        fs.mkdirSync(dayDir, { recursive: true });
+      } catch {
+        // ignore
+      }
+      cb(null, dayDir);
+    },
     filename: (req, file, cb) => {
       const userId = (req as AuthRequest).user?.id ?? 'unknown';
       const ext = path.extname(file.originalname || '') || '.jpg';
@@ -28,7 +42,15 @@ const uploadAvatar = multer({
     fileSize: 5 * 1024 * 1024, // 5MB
   },
   fileFilter: (_req, file, cb) => {
-    if (!file.mimetype.startsWith('image/')) {
+    // Flutter иногда отправляет multipart как application/octet-stream,
+    // поэтому опираемся не только на mimetype, но и на расширение имени.
+    const mimetype = file.mimetype ?? '';
+    const ext = path.extname(file.originalname || '').toLowerCase();
+
+    const okByMime = mimetype.startsWith('image/');
+    const okByExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+
+    if (!okByMime && !okByExt) {
       return cb(new Error('Only image uploads are allowed'));
     }
     cb(null, true);
@@ -84,7 +106,14 @@ router.post(
     if (!userId) return res.status(401).json({ error: 'Unauthorized' });
     if (!req.file) return res.status(400).json({ error: 'avatar is required' });
 
-    const relativeUrl = `/uploads/avatars/${req.file.filename}`;
+    // req.file.destination указывает реальный путь на диске (например: .../uploads/avatars/2026-03-19)
+    // Конвертим в URL-формат с прямыми слешами.
+    const fileDestination = (req.file as any).destination as string | undefined;
+    const relToUploads =
+      fileDestination != null ? path.relative(uploadsDir, fileDestination) : null;
+    const relToUploadsUrl =
+      relToUploads != null ? relToUploads.split(path.sep).join('/') : 'avatars';
+    const relativeUrl = `/uploads/${relToUploadsUrl}/${req.file.filename}`;
     const client = await pool.connect();
     try {
       const result = await client.query(

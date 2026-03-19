@@ -12,7 +12,9 @@ class ApiClient {
   // Для Android-эмулятора: http://10.0.2.2:4001
   // Для реального девайса по USB: http://<IP_ПК>:4001
   // Пока оставим localhost, если тестируешь на десктопе/эмуляторе с пробросом.
-  static const String baseUrl = 'http://localhost:4006';
+  // static const String baseUrl = 'http://localhost:4006';
+  // static const String baseUrl = 'http://localhost:4006';
+  static const String baseUrl = 'http://192.168.0.223:4006';
 
   Uri _uri(String path, [Map<String, String>? query]) {
     return Uri.parse('$baseUrl$path').replace(queryParameters: query);
@@ -172,9 +174,16 @@ class ApiClient {
 
     final streamed = await req.send();
     final res = await http.Response.fromStream(streamed);
-    final data = res.body.isNotEmpty
-        ? jsonDecode(res.body) as Map<String, dynamic>
-        : <String, dynamic>{};
+    final data = (() {
+      if (res.body.isEmpty) return <String, dynamic>{};
+      try {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      } catch (_) {
+        // If backend returns HTML/text for some error (e.g. default Express 404/500),
+        // jsonDecode() will throw. We still want to surface the response body.
+        return <String, dynamic>{'error': res.body};
+      }
+    })();
 
     if (res.statusCode >= 200 && res.statusCode < 300) {
       return data;
