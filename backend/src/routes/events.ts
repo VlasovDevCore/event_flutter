@@ -14,13 +14,18 @@ router.get('/', async (req, res) => {
       const [minLon, minLat, maxLon, maxLat] = bbox;
       const result = await client.query(
         `
-        SELECT id, title, description, lat, lon,
-               marker_color_value, marker_icon_code, created_at, ends_at
-        FROM events
+        SELECT e.id, e.title, e.description, e.lat, e.lon,
+               e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+               e.created_by AS created_by_user_id,
+               u.email AS created_by_email,
+               u.username AS created_by_username,
+               u.display_name AS created_by_display_name
+        FROM events e
+        LEFT JOIN users u ON u.id = e.created_by
         WHERE lon BETWEEN $1 AND $2
           AND lat BETWEEN $3 AND $4
           AND (ends_at IS NULL OR ends_at >= now())
-        ORDER BY created_at DESC
+        ORDER BY e.created_at DESC
         `,
         [minLon, maxLon, minLat, maxLat],
       );
@@ -29,11 +34,16 @@ router.get('/', async (req, res) => {
 
     const result = await client.query(
       `
-      SELECT id, title, description, lat, lon,
-             marker_color_value, marker_icon_code, created_at, ends_at
-      FROM events
-      WHERE (ends_at IS NULL OR ends_at >= now())
-      ORDER BY created_at DESC
+      SELECT e.id, e.title, e.description, e.lat, e.lon,
+             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+             e.created_by AS created_by_user_id,
+             u.email AS created_by_email,
+             u.username AS created_by_username,
+             u.display_name AS created_by_display_name
+      FROM events e
+      LEFT JOIN users u ON u.id = e.created_by
+      WHERE (e.ends_at IS NULL OR e.ends_at >= now())
+      ORDER BY e.created_at DESC
       LIMIT 200
       `,
     );
@@ -58,9 +68,47 @@ router.get('/my/rooms', authMiddleware, async (req: AuthRequest, res) => {
     const result = await client.query(
       `
       SELECT e.id, e.title, e.description, e.lat, e.lon,
-             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at
+             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+             e.created_by AS created_by_user_id,
+             u.email AS created_by_email,
+             u.username AS created_by_username,
+             u.display_name AS created_by_display_name
       FROM events e
+      LEFT JOIN users u ON u.id = e.created_by
       INNER JOIN event_rsvp r ON r.event_id = e.id AND r.user_id = $1 AND r.status = 1
+      ORDER BY e.ends_at ASC NULLS LAST, e.created_at DESC
+      `,
+      [userId],
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// События, которые создал текущий пользователь (включая завершённые)
+router.get('/my/created', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      SELECT e.id, e.title, e.description, e.lat, e.lon,
+             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+             e.created_by AS created_by_user_id,
+             u.email AS created_by_email,
+             u.username AS created_by_username,
+             u.display_name AS created_by_display_name
+      FROM events e
+      LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.created_by = $1
       ORDER BY e.ends_at ASC NULLS LAST, e.created_at DESC
       `,
       [userId],
@@ -82,10 +130,15 @@ router.get('/:id', async (req, res) => {
   try {
     const result = await client.query(
       `
-      SELECT id, title, description, lat, lon,
-             marker_color_value, marker_icon_code, created_at, ends_at
-      FROM events
-      WHERE id = $1
+      SELECT e.id, e.title, e.description, e.lat, e.lon,
+             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+             e.created_by AS created_by_user_id,
+             u.email AS created_by_email,
+             u.username AS created_by_username,
+             u.display_name AS created_by_display_name
+      FROM events e
+      LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.id = $1
       `,
       [id],
     );
@@ -96,7 +149,8 @@ router.get('/:id', async (req, res) => {
 
     const going = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+             u.avatar_color_value, u.avatar_icon_code, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = 1
@@ -106,7 +160,8 @@ router.get('/:id', async (req, res) => {
     );
     const notGoing = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+             u.avatar_color_value, u.avatar_icon_code, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = -1
@@ -119,6 +174,115 @@ router.get('/:id', async (req, res) => {
     (event as Record<string, unknown>).not_going_users = notGoing.rows;
 
     return res.json(event);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Редактирование события (только создатель)
+router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const {
+    title,
+    description,
+    markerColorValue,
+    markerIconCode,
+  } = req.body as {
+    title?: string;
+    description?: string;
+    markerColorValue?: number;
+    markerIconCode?: number;
+  };
+
+  const client = await pool.connect();
+  try {
+    const ownership = await client.query(
+      'SELECT created_by FROM events WHERE id = $1',
+      [id],
+    );
+    if (ownership.rowCount === 0) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const ownerId = (ownership.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== userId) {
+      return res.status(403).json({ error: 'Только создатель может редактировать событие' });
+    }
+
+    const updated = await client.query(
+      `
+      UPDATE events
+      SET title = COALESCE($2, title),
+          description = COALESCE($3, description),
+          marker_color_value = COALESCE($4, marker_color_value),
+          marker_icon_code = COALESCE($5, marker_icon_code)
+      WHERE id = $1
+      RETURNING id, title, description, lat, lon,
+                marker_color_value, marker_icon_code, created_at, ends_at,
+                created_by AS created_by_user_id
+      `,
+      [id, title ?? null, description ?? null, markerColorValue ?? null, markerIconCode ?? null],
+    );
+
+    const row = updated.rows[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    if (row.created_by_user_id) {
+      const creatorResult = await client.query(
+        `
+        SELECT email, username, display_name
+        FROM users
+        WHERE id = $1
+        `,
+        [row.created_by_user_id as string],
+      );
+      const creator = creatorResult.rows[0] as
+        | { email?: string; username?: string; display_name?: string }
+        | undefined;
+      if (creator) {
+        row.created_by_email = creator.email ?? null;
+        row.created_by_username = creator.username ?? null;
+        row.created_by_display_name = creator.display_name ?? null;
+      }
+    }
+
+    const going = await client.query(
+      `
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+             u.avatar_color_value, u.avatar_icon_code, u.status
+      FROM event_rsvp r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.event_id = $1 AND r.status = 1
+      ORDER BY r.updated_at ASC
+      `,
+      [id],
+    );
+    const notGoing = await client.query(
+      `
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+             u.avatar_color_value, u.avatar_icon_code, u.status
+      FROM event_rsvp r
+      JOIN users u ON u.id = r.user_id
+      WHERE r.event_id = $1 AND r.status = -1
+      ORDER BY r.updated_at ASC
+      `,
+      [id],
+    );
+    row.going_users = going.rows;
+    row.not_going_users = notGoing.rows;
+
+    return res.json(row);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -160,13 +324,15 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const going = await client.query(
-      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+              u.avatar_color_value, u.avatar_icon_code, u.status
        FROM event_rsvp r JOIN users u ON u.id = r.user_id
        WHERE r.event_id = $1 AND r.status = 1 ORDER BY r.updated_at ASC`,
       [eventId],
     );
     const notGoing = await client.query(
-      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
+              u.avatar_color_value, u.avatar_icon_code, u.status
        FROM event_rsvp r JOIN users u ON u.id = r.user_id
        WHERE r.event_id = $1 AND r.status = -1 ORDER BY r.updated_at ASC`,
       [eventId],
@@ -340,7 +506,8 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       INSERT INTO events (title, description, lat, lon, marker_color_value, marker_icon_code, ends_at, created_by)
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING id, title, description, lat, lon,
-                marker_color_value, marker_icon_code, created_at, ends_at
+                marker_color_value, marker_icon_code, created_at, ends_at,
+                created_by AS created_by_user_id
       `,
       [
         title,
@@ -354,6 +521,34 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
       ],
     );
     const created = result.rows[0];
+    const creatorUserId = req.user?.id;
+    if (creatorUserId && created?.id) {
+      await client.query(
+        `
+        INSERT INTO event_rsvp (event_id, user_id, status)
+        VALUES ($1, $2, 1)
+        ON CONFLICT (event_id, user_id)
+        DO UPDATE SET status = 1, updated_at = now()
+        `,
+        [created.id, creatorUserId],
+      );
+    }
+    if (created?.created_by_user_id) {
+      const creatorResult = await client.query(
+        `
+        SELECT email, username, display_name
+        FROM users
+        WHERE id = $1
+        `,
+        [created.created_by_user_id],
+      );
+      const creator = creatorResult.rows[0];
+      if (creator) {
+        created.created_by_email = creator.email;
+        created.created_by_username = creator.username;
+        created.created_by_display_name = creator.display_name;
+      }
+    }
     // eslint-disable-next-line no-console
     console.log('POST /events created:', created);
     return res.status(201).json(created);

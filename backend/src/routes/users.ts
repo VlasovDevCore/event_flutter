@@ -2,10 +2,51 @@ import { Router } from 'express';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import type { PoolClient } from 'pg';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { buildAchievementsFromStats, type UserEventStats } from '../achievementRules';
 
 const router = Router();
+
+async function getUserEventStats(client: PoolClient, userId: string): Promise<UserEventStats> {
+  const createdEvents = await client.query(
+    `SELECT COUNT(*)::int AS count FROM events WHERE created_by = $1`,
+    [userId],
+  );
+
+  const totalGoingToMyEvents = await client.query(
+    `
+      SELECT COALESCE(SUM(x.going_count), 0)::int AS count
+      FROM (
+        SELECT COUNT(r.user_id)::int AS going_count
+        FROM events e
+        LEFT JOIN event_rsvp r
+          ON r.event_id = e.id AND r.status = 1
+        WHERE e.created_by = $1
+        GROUP BY e.id
+      ) x
+      `,
+    [userId],
+  );
+
+  const eventsIGoing = await client.query(
+    `SELECT COUNT(*)::int AS count FROM event_rsvp WHERE user_id = $1 AND status = 1`,
+    [userId],
+  );
+
+  const followers = await client.query(
+    `SELECT COUNT(*)::int AS count FROM friend_requests WHERE to_user_id = $1`,
+    [userId],
+  );
+
+  return {
+    created_events_count: (createdEvents.rows[0] as { count: number }).count,
+    total_going_to_my_events_count: (totalGoingToMyEvents.rows[0] as { count: number }).count,
+    events_i_going_count: (eventsIGoing.rows[0] as { count: number }).count,
+    followers_count: (followers.rows[0] as { count: number }).count,
+  };
+}
 
 const avatarsBaseDir = path.join(process.cwd(), 'uploads', 'avatars');
 const uploadsDir = path.join(process.cwd(), 'uploads');
@@ -305,42 +346,26 @@ router.get('/me/stats', authMiddleware, async (req: AuthRequest, res) => {
 
   const client = await pool.connect();
   try {
-    const createdEvents = await client.query(
-      `SELECT COUNT(*)::int AS count FROM events WHERE created_by = $1`,
-      [userId],
-    );
+    const stats = await getUserEventStats(client, userId);
+    return res.json(stats);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
 
-    const totalGoingToMyEvents = await client.query(
-      `
-      SELECT COALESCE(SUM(x.going_count), 0)::int AS count
-      FROM (
-        SELECT COUNT(r.user_id)::int AS going_count
-        FROM events e
-        LEFT JOIN event_rsvp r
-          ON r.event_id = e.id AND r.status = 1
-        WHERE e.created_by = $1
-        GROUP BY e.id
-      ) x
-      `,
-      [userId],
-    );
+// Мой профиль: достижения (на основе статистики)
+router.get('/me/achievements', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
 
-    const eventsIGoing = await client.query(
-      `SELECT COUNT(*)::int AS count FROM event_rsvp WHERE user_id = $1 AND status = 1`,
-      [userId],
-    );
-
-    const followers = await client.query(
-      `SELECT COUNT(*)::int AS count FROM friend_requests WHERE to_user_id = $1`,
-      [userId],
-    );
-
-    return res.json({
-      created_events_count: (createdEvents.rows[0] as { count: number }).count,
-      total_going_to_my_events_count: (totalGoingToMyEvents.rows[0] as { count: number }).count,
-      events_i_going_count: (eventsIGoing.rows[0] as { count: number }).count,
-      followers_count: (followers.rows[0] as { count: number }).count,
-    });
+  const client = await pool.connect();
+  try {
+    const stats = await getUserEventStats(client, userId);
+    return res.json({ achievements: buildAchievementsFromStats(stats) });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -390,42 +415,28 @@ router.get('/:id/stats', async (req, res) => {
   const { id: userId } = req.params;
   const client = await pool.connect();
   try {
-    const createdEvents = await client.query(
-      `SELECT COUNT(*)::int AS count FROM events WHERE created_by = $1`,
-      [userId],
-    );
+    const stats = await getUserEventStats(client, userId);
+    return res.json(stats);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
 
-    const totalGoingToUserEvents = await client.query(
-      `
-      SELECT COALESCE(SUM(x.going_count), 0)::int AS count
-      FROM (
-        SELECT COUNT(r.user_id)::int AS going_count
-        FROM events e
-        LEFT JOIN event_rsvp r
-          ON r.event_id = e.id AND r.status = 1
-        WHERE e.created_by = $1
-        GROUP BY e.id
-      ) x
-      `,
-      [userId],
-    );
-
-    const eventsUserGoing = await client.query(
-      `SELECT COUNT(*)::int AS count FROM event_rsvp WHERE user_id = $1 AND status = 1`,
-      [userId],
-    );
-
-    const followers = await client.query(
-      `SELECT COUNT(*)::int AS count FROM friend_requests WHERE to_user_id = $1`,
-      [userId],
-    );
-
-    return res.json({
-      created_events_count: (createdEvents.rows[0] as { count: number }).count,
-      total_going_to_my_events_count: (totalGoingToUserEvents.rows[0] as { count: number }).count,
-      events_i_going_count: (eventsUserGoing.rows[0] as { count: number }).count,
-      followers_count: (followers.rows[0] as { count: number }).count,
-    });
+// Публичные достижения пользователя (для просмотра профиля)
+router.get('/:id/achievements', async (req, res) => {
+  const { id: userId } = req.params;
+  const client = await pool.connect();
+  try {
+    const exists = await client.query('SELECT 1 FROM users WHERE id = $1', [userId]);
+    if (exists.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    const stats = await getUserEventStats(client, userId);
+    return res.json({ achievements: buildAchievementsFromStats(stats) });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

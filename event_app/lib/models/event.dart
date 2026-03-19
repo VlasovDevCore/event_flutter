@@ -14,6 +14,9 @@ class Event {
   this.goingUserProfiles = const [],
   this.notGoingUserProfiles = const [],
   this.endsAt,
+  this.creatorId,
+  this.creatorEmail,
+  this.creatorName,
   });
 
   final String id;
@@ -34,6 +37,9 @@ class Event {
   final List<EventUserProfile> notGoingUserProfiles;
   /// До какой даты событие актуально (макс. неделя вперёд при создании).
   final DateTime? endsAt;
+  final String? creatorId;
+  final String? creatorEmail;
+  final String? creatorName;
 
   Map<String, dynamic> toMap() {
     return {
@@ -51,6 +57,9 @@ class Event {
       'goingUserProfiles': goingUserProfiles.map((e) => e.toMap()).toList(),
       'notGoingUserProfiles': notGoingUserProfiles.map((e) => e.toMap()).toList(),
       if (endsAt != null) 'endsAt': endsAt!.toIso8601String(),
+      if (creatorId != null) 'creatorId': creatorId,
+      if (creatorEmail != null) 'creatorEmail': creatorEmail,
+      if (creatorName != null) 'creatorName': creatorName,
     };
   }
 
@@ -82,6 +91,9 @@ class Event {
           .map((e) => EventUserProfile.fromMap(Map<String, dynamic>.from(e)))
           .toList(),
       endsAt: map['endsAt'] != null ? DateTime.parse(map['endsAt'] as String) : null,
+      creatorId: map['creatorId']?.toString(),
+      creatorEmail: map['creatorEmail']?.toString(),
+      creatorName: map['creatorName']?.toString(),
     );
   }
 
@@ -104,6 +116,151 @@ class Event {
       }).toList();
     }
 
+    int parseRsvpStatusValue(dynamic value) {
+      if (value == null) return 0;
+      if (value is num) {
+        if (value > 0) return 1;
+        if (value < 0) return -1;
+        return 0;
+      }
+
+      final normalized = value.toString().trim().toLowerCase();
+      if (normalized.isEmpty) return 0;
+
+      if (normalized == '1' ||
+          normalized == 'true' ||
+          normalized == 'going' ||
+          normalized == 'yes' ||
+          normalized == 'accepted') {
+        return 1;
+      }
+      if (normalized == '-1' ||
+          normalized == 'false' ||
+          normalized == 'not_going' ||
+          normalized == 'not-going' ||
+          normalized == 'declined' ||
+          normalized == 'no') {
+        return -1;
+      }
+
+      final parsed = int.tryParse(normalized);
+      if (parsed == null) return 0;
+      if (parsed > 0) return 1;
+      if (parsed < 0) return -1;
+      return 0;
+    }
+
+    int parseRsvpStatus() {
+      final candidates = [
+        map['rsvp_status'],
+        map['rsvpStatus'],
+        map['current_user_rsvp_status'],
+        map['currentUserRsvpStatus'],
+        map['my_rsvp_status'],
+        map['myRsvpStatus'],
+        map['status'],
+      ];
+
+      for (final value in candidates) {
+        final parsed = parseRsvpStatusValue(value);
+        if (parsed != 0) return parsed;
+      }
+
+      return 0;
+    }
+
+    String? parseCreatorId() {
+      final nestedCandidates = [
+        map['creator'],
+        map['created_by'],
+        map['author'],
+        map['user'],
+      ];
+      for (final raw in nestedCandidates) {
+        if (raw is Map) {
+          final nested = Map<String, dynamic>.from(raw);
+          final id = (nested['id'] ??
+                  nested['user_id'] ??
+                  nested['userId'] ??
+                  nested['creator_id'] ??
+                  nested['creatorId'])
+              ?.toString();
+          if (id != null && id.trim().isNotEmpty) return id.trim();
+        }
+      }
+      final flat = (map['created_by_user_id'] ??
+              map['createdByUserId'] ??
+              map['creator_id'] ??
+              map['creatorId'] ??
+              map['user_id'] ??
+              map['userId'])
+          ?.toString();
+      if (flat == null || flat.trim().isEmpty) return null;
+      return flat.trim();
+    }
+
+    String? parseCreatorEmail() {
+      final nestedCandidates = [
+        map['creator'],
+        map['created_by'],
+        map['author'],
+        map['user'],
+      ];
+      for (final raw in nestedCandidates) {
+        if (raw is Map) {
+          final nested = Map<String, dynamic>.from(raw);
+          final email =
+              (nested['email'] ?? nested['creator_email'] ?? nested['creatorEmail'])?.toString();
+          if (email != null && email.trim().isNotEmpty) return email.trim();
+        }
+      }
+      final flat = (map['created_by_email'] ??
+              map['createdByEmail'] ??
+              map['creator_email'] ??
+              map['creatorEmail'] ??
+              map['email'])
+          ?.toString();
+      if (flat == null || flat.trim().isEmpty) return null;
+      return flat.trim();
+    }
+
+    String? parseCreatorName() {
+      final nestedCandidates = [
+        map['creator'],
+        map['created_by'],
+        map['author'],
+        map['user'],
+      ];
+      for (final raw in nestedCandidates) {
+        if (raw is Map) {
+          final nested = Map<String, dynamic>.from(raw);
+          final displayName = (nested['display_name'] ??
+                  nested['displayName'] ??
+                  nested['full_name'] ??
+                  nested['fullName'] ??
+                  nested['name'] ??
+                  nested['username'])
+              ?.toString();
+          if (displayName != null && displayName.trim().isNotEmpty) {
+            return displayName.trim();
+          }
+        }
+      }
+      final flat = (map['created_by_name'] ??
+              map['createdByName'] ??
+              map['created_by_display_name'] ??
+              map['createdByDisplayName'] ??
+              map['created_by_username'] ??
+              map['createdByUsername'] ??
+              map['creator_name'] ??
+              map['creatorName'] ??
+              map['author_name'] ??
+              map['authorName'])
+          ?.toString();
+      if (flat == null || flat.trim().isEmpty) return null;
+      return flat.trim();
+    }
+
     return Event(
       id: map['id'] as String,
       title: map['title'] as String,
@@ -113,7 +270,7 @@ class Event {
       createdAt: DateTime.parse((map['created_at'] ?? map['createdAt']) as String),
       markerColorValue: int.parse((map['marker_color_value'] ?? map['markerColorValue'] ?? 0xFF2196F3).toString()),
       markerIconCodePoint: int.parse((map['marker_icon_code'] ?? map['markerIconCodePoint'] ?? 0xE1C7).toString()),
-      rsvpStatus: 0,
+      rsvpStatus: parseRsvpStatus(),
       goingUsers: parseEmails(goingRaw),
       notGoingUsers: parseEmails(notGoingRaw),
       goingUserProfiles: parseProfiles(goingRaw),
@@ -121,6 +278,9 @@ class Event {
       endsAt: map['ends_at'] != null || map['endsAt'] != null
           ? DateTime.parse((map['ends_at'] ?? map['endsAt']) as String)
           : null,
+      creatorId: parseCreatorId(),
+      creatorEmail: parseCreatorEmail(),
+      creatorName: parseCreatorName(),
     );
   }
 }
@@ -132,16 +292,22 @@ class EventUserProfile {
     required this.username,
     required this.displayName,
     required this.avatarUrl,
+    this.avatarColorValue,
+    this.avatarIconCode,
     this.status = 1,
   });
 
   factory EventUserProfile.fromApiMap(Map<String, dynamic> map) {
+    final colorRaw = map['avatar_color_value'] ?? map['avatarColorValue'];
+    final iconRaw = map['avatar_icon_code'] ?? map['avatarIconCode'];
     return EventUserProfile(
       id: map['id']?.toString() ?? '',
       email: map['email']?.toString(),
       username: map['username']?.toString(),
       displayName: (map['display_name'] ?? map['displayName'])?.toString(),
       avatarUrl: (map['avatar_url'] ?? map['avatarUrl'])?.toString(),
+      avatarColorValue: colorRaw is num ? colorRaw.toInt() : int.tryParse('$colorRaw'),
+      avatarIconCode: iconRaw is num ? iconRaw.toInt() : int.tryParse('$iconRaw'),
       status: int.tryParse((map['status'] ?? map['rsvp_status'] ?? 1).toString()) ?? 1,
     );
   }
@@ -153,6 +319,8 @@ class EventUserProfile {
       username: map['username']?.toString(),
       displayName: map['displayName']?.toString(),
       avatarUrl: map['avatarUrl']?.toString(),
+      avatarColorValue: (map['avatarColorValue'] as num?)?.toInt(),
+      avatarIconCode: (map['avatarIconCode'] as num?)?.toInt(),
       status: int.tryParse((map['status'] ?? map['rsvpStatus'] ?? 1).toString()) ?? 1,
     );
   }
@@ -163,6 +331,8 @@ class EventUserProfile {
         'username': username,
         'displayName': displayName,
         'avatarUrl': avatarUrl,
+        if (avatarColorValue != null) 'avatarColorValue': avatarColorValue,
+        if (avatarIconCode != null) 'avatarIconCode': avatarIconCode,
         'status': status,
       };
 
@@ -171,6 +341,10 @@ class EventUserProfile {
   final String? username;
   final String? displayName;
   final String? avatarUrl;
+  /// Цвет круга без фото (как в профиле)
+  final int? avatarColorValue;
+  /// codePoint иконки Material без фото
+  final int? avatarIconCode;
   /// 1 = иду, -1 = не иду, 0 = без статуса
   final int status;
 }

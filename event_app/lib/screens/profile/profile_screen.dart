@@ -1,49 +1,24 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/api_client.dart';
+import '../auth/auth_screen.dart';
 import '../chat/direct_chat_screen.dart';
 import 'profile_avatar.dart';
 import 'profile_models.dart';
 import 'profile_qr_screen.dart';
-import 'widgets/profile_edit_sheet_content.dart';
+import 'profile_repository.dart';
+import 'profile_social_models.dart';
+import 'widgets/achievement_section.dart';
 import 'widgets/avatar_crop_dialog.dart';
+import 'widgets/birth_date_numeric_sheet.dart';
+import 'widgets/profile_edit_sheet_content.dart';
 import 'widgets/stat_tile.dart';
-
-class _Relationship {
-  const _Relationship({
-    required this.isFollowing,
-    required this.isFollowedBy,
-    required this.isFriends,
-  });
-
-  const _Relationship.empty()
-      : isFollowing = false,
-        isFollowedBy = false,
-        isFriends = false;
-
-  final bool isFollowing;
-  final bool isFollowedBy;
-  final bool isFriends;
-}
-
-class _BlockStatus {
-  const _BlockStatus({
-    required this.isBlocked,
-    required this.isBlockedBy,
-  });
-
-  const _BlockStatus.empty()
-      : isBlocked = false,
-        isBlockedBy = false;
-
-  final bool isBlocked;
-  final bool isBlockedBy;
-}
+import 'profile_achievement.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
@@ -63,22 +38,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<ProfileStats> _statsFuture;
   late Future<ProfileMe?> _otherUserFuture;
   late Future<ProfileStats> _otherStatsFuture;
-  late Future<_Relationship> _relationshipFuture;
-  late Future<_BlockStatus> _blockStatusFuture;
+  late Future<ProfileRelationship> _relationshipFuture;
+  late Future<ProfileBlockStatus> _blockStatusFuture;
+  late Future<List<ProfileAchievement>> _achievementsFuture;
   bool _savingProfile = false;
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = widget.userId == null ? _loadStats() : Future.value(const ProfileStats.empty());
-    _otherUserFuture = widget.userId == null ? Future.value(null) : _loadOtherUser(widget.userId!);
-    _otherStatsFuture = widget.userId == null ? Future.value(const ProfileStats.empty()) : _loadUserStats(widget.userId!);
-    _relationshipFuture =
-        widget.userId == null ? Future.value(const _Relationship.empty()) : _loadRelationship(widget.userId!);
-    _blockStatusFuture =
-        widget.userId == null ? Future.value(const _BlockStatus.empty()) : _loadBlockStatus(widget.userId!);
+    _statsFuture =
+        widget.userId == null ? ProfileRepository.fetchMyStats() : Future.value(const ProfileStats.empty());
+    _otherUserFuture =
+        widget.userId == null ? Future.value(null) : ProfileRepository.fetchUser(widget.userId!);
+    _otherStatsFuture = widget.userId == null
+        ? Future.value(const ProfileStats.empty())
+        : ProfileRepository.fetchUserStats(widget.userId!);
+    _relationshipFuture = widget.userId == null
+        ? Future.value(const ProfileRelationship.empty())
+        : ProfileRepository.fetchRelationship(widget.userId!);
+    _blockStatusFuture = widget.userId == null
+        ? Future.value(const ProfileBlockStatus.empty())
+        : ProfileRepository.fetchBlockStatus(widget.userId!);
+    _achievementsFuture = widget.userId == null
+        ? ProfileRepository.fetchMyAchievements()
+        : ProfileRepository.fetchUserAchievements(widget.userId!);
     if (widget.userId == null) {
-      _loadMe();
+      ProfileRepository.fetchMeAndWriteHive();
     }
   }
 
@@ -93,67 +78,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _avatarUrl() => Hive.box('authBox').get('avatarUrl') as String?;
   bool _allowMessagesFromNonFriends() =>
       (Hive.box('authBox').get('allowMessagesFromNonFriends') as bool?) ?? true;
-
-  Future<ProfileMe> _loadMe() async {
-    final data = await ApiClient.instance.get('/users/me', withAuth: true);
-    final me = ProfileMe.fromApi(data);
-
-    final box = Hive.box('authBox');
-    await box.put('username', me.username);
-    await box.put('email', me.email);
-    await box.put('status', me.status);
-    await box.put('displayName', me.displayName);
-    await box.put('bio', me.bio);
-    await box.put('birthDate', me.birthDate);
-    await box.put('gender', me.gender);
-    await box.put('avatarColorValue', me.avatarColorValue);
-    await box.put('avatarIconCodePoint', me.avatarIconCodePoint);
-    await box.put('avatarUrl', me.avatarUrl);
-    await box.put('allowMessagesFromNonFriends', me.allowMessagesFromNonFriends);
-    return me;
-  }
-
-  Future<ProfileStats> _loadStats() async {
-    final data = await ApiClient.instance.get('/users/me/stats', withAuth: true);
-    return ProfileStats(
-      createdEventsCount: (data['created_events_count'] as num?)?.toInt() ?? 0,
-      totalGoingToMyEventsCount: (data['total_going_to_my_events_count'] as num?)?.toInt() ?? 0,
-      eventsIGoingCount: (data['events_i_going_count'] as num?)?.toInt() ?? 0,
-      followersCount: (data['followers_count'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  Future<ProfileMe> _loadOtherUser(String userId) async {
-    final data = await ApiClient.instance.get('/users/$userId');
-    return ProfileMe.fromApi(data);
-  }
-
-  Future<ProfileStats> _loadUserStats(String userId) async {
-    final data = await ApiClient.instance.get('/users/$userId/stats');
-    return ProfileStats(
-      createdEventsCount: (data['created_events_count'] as num?)?.toInt() ?? 0,
-      totalGoingToMyEventsCount: (data['total_going_to_my_events_count'] as num?)?.toInt() ?? 0,
-      eventsIGoingCount: (data['events_i_going_count'] as num?)?.toInt() ?? 0,
-      followersCount: (data['followers_count'] as num?)?.toInt() ?? 0,
-    );
-  }
-
-  Future<_Relationship> _loadRelationship(String userId) async {
-    final data = await ApiClient.instance.get('/friends/relationship/$userId', withAuth: true);
-    return _Relationship(
-      isFollowing: data['isFollowing'] == true,
-      isFollowedBy: data['isFollowedBy'] == true,
-      isFriends: data['isFriends'] == true,
-    );
-  }
-
-  Future<_BlockStatus> _loadBlockStatus(String userId) async {
-    final data = await ApiClient.instance.get('/blocks/status/$userId', withAuth: true);
-    return _BlockStatus(
-      isBlocked: data['isBlocked'] == true,
-      isBlockedBy: data['isBlockedBy'] == true,
-    );
-  }
 
   Color _avatarColorOrDefault() {
     final v = _avatarColorValue();
@@ -279,155 +203,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       bioController.dispose();
     }
 
-    Future<void> openBirthDateNumericSheet({
-      required BuildContext sheetContext,
-      required void Function(String?) setBirthDate,
-    }) async {
-      final current = birthDate;
-      final y = (current != null && current.length >= 4) ? current.substring(0, 4) : '';
-      final m = (current != null && current.length >= 7) ? current.substring(5, 7) : '';
-      final d = (current != null && current.length >= 10) ? current.substring(8, 10) : '';
-
-      final dayCtrl = TextEditingController(text: d);
-      final monthCtrl = TextEditingController(text: m);
-      final yearCtrl = TextEditingController(text: y);
-
-      final res = await showModalBottomSheet<String?>(
-        context: sheetContext,
-        isScrollControlled: true,
-        showDragHandle: true,
-        useSafeArea: true,
-        builder: (context) {
-          return Padding(
-            padding: EdgeInsets.fromLTRB(
-              16,
-              8,
-              16,
-              16 + MediaQuery.of(context).viewInsets.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'Дата рождения',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: dayCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(2),
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'День',
-                          hintText: '01',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: monthCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(2),
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'Месяц',
-                          hintText: '12',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextField(
-                        controller: yearCtrl,
-                        keyboardType: TextInputType.number,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(4),
-                        ],
-                        decoration: const InputDecoration(
-                          labelText: 'Год',
-                          hintText: '1999',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () {
-                    final day = int.tryParse(dayCtrl.text.trim());
-                    final month = int.tryParse(monthCtrl.text.trim());
-                    final year = int.tryParse(yearCtrl.text.trim());
-                    if (day == null || month == null || year == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Введите день, месяц и год')),
-                      );
-                      return;
-                    }
-                    if (year < 1900 || year > DateTime.now().year) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Некорректный год')),
-                      );
-                      return;
-                    }
-                    if (month < 1 || month > 12) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Некорректный месяц')),
-                      );
-                      return;
-                    }
-                    if (day < 1 || day > 31) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Некорректный день')),
-                      );
-                      return;
-                    }
-                    final dt = DateTime(year, month, day);
-                    if (dt.year != year || dt.month != month || dt.day != day) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Такой даты не существует')),
-                      );
-                      return;
-                    }
-                    if (dt.isAfter(DateTime.now())) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Дата не может быть в будущем')),
-                      );
-                      return;
-                    }
-                    final s =
-                        '${year.toString().padLeft(4, '0')}-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
-                    Navigator.of(context).pop(s);
-                  },
-                  child: const Text('Сохранить'),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          );
-        },
-      );
-
-      dayCtrl.dispose();
-      monthCtrl.dispose();
-      yearCtrl.dispose();
-
-      setBirthDate(res);
-    }
-
     usernameController.addListener(onAnyTextChange);
     displayNameController.addListener(onAnyTextChange);
     bioController.addListener(onAnyTextChange);
@@ -518,14 +293,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     }
                   },
                   onPickBirthDate: () async {
-                    await openBirthDateNumericSheet(
-                      sheetContext: context,
-                      setBirthDate: (v) {
-                        if (v == null) return;
-                        setSheetState(() => birthDate = v);
-                        schedulePersist();
-                      },
+                    final v = await showBirthDateNumericSheet(
+                      context,
+                      currentBirthDate: birthDate,
                     );
+                    if (v == null) return;
+                    setSheetState(() => birthDate = v);
+                    schedulePersist();
                   },
                   onGenderChanged: (v) {
                     setSheetState(() => gender = v);
@@ -545,6 +319,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
 
     disposeControllers();
+  }
+
+  Future<void> _confirmSignOut() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Выход'),
+        content: const Text('Выйти из аккаунта?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Выйти'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    await Hive.box('authBox').clear();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
+      (route) => false,
+    );
   }
 
   @override
@@ -588,26 +389,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                   icon: const Icon(Icons.qr_code),
                 ),
+                IconButton(
+                  tooltip: 'Выйти',
+                  onPressed: _savingProfile ? null : _confirmSignOut,
+                  icon: const Icon(Icons.logout),
+                ),
               ]
             : null,
       ),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(() {
-            _statsFuture = isMe ? _loadStats() : Future.value(const ProfileStats.empty());
+            _statsFuture =
+                isMe ? ProfileRepository.fetchMyStats() : Future.value(const ProfileStats.empty());
+            _achievementsFuture = isMe
+                ? ProfileRepository.fetchMyAchievements()
+                : ProfileRepository.fetchUserAchievements(widget.userId!);
           });
           if (isMe) {
-            await _loadMe();
+            await ProfileRepository.fetchMeAndWriteHive();
           } else {
             setState(() {
-              _otherUserFuture = _loadOtherUser(widget.userId!);
-              _otherStatsFuture = _loadUserStats(widget.userId!);
-              _relationshipFuture = _loadRelationship(widget.userId!);
-              _blockStatusFuture = _loadBlockStatus(widget.userId!);
+              _otherUserFuture = ProfileRepository.fetchUser(widget.userId!);
+              _otherStatsFuture = ProfileRepository.fetchUserStats(widget.userId!);
+              _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
+              _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
             });
             await _otherUserFuture;
           }
           await _statsFuture;
+          await _achievementsFuture;
         },
         child: isMe
             ? _buildMyProfile(context, email, username, displayName)
@@ -635,10 +446,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             FilledButton.icon(
                               onPressed: () {
                                 setState(() {
-                                  _otherUserFuture = _loadOtherUser(widget.userId!);
-                                  _otherStatsFuture = _loadUserStats(widget.userId!);
-                                  _relationshipFuture = _loadRelationship(widget.userId!);
-                                  _blockStatusFuture = _loadBlockStatus(widget.userId!);
+                                  _otherUserFuture = ProfileRepository.fetchUser(widget.userId!);
+                                  _otherStatsFuture = ProfileRepository.fetchUserStats(widget.userId!);
+                                  _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
+                                  _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
                                 });
                               },
                               icon: const Icon(Icons.refresh),
@@ -701,10 +512,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 12),
-                      FutureBuilder<_BlockStatus>(
+                      FutureBuilder<ProfileBlockStatus>(
                         future: _blockStatusFuture,
                         builder: (context, blockSnap) {
-                          final b = blockSnap.data ?? const _BlockStatus.empty();
+                          final b = blockSnap.data ?? const ProfileBlockStatus.empty();
                           final blocked = b.isBlocked;
                           final blockedBy = b.isBlockedBy;
 
@@ -731,10 +542,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             );
                           }
 
-                          return FutureBuilder<_Relationship>(
+                          return FutureBuilder<ProfileRelationship>(
                             future: _relationshipFuture,
                             builder: (context, relSnap) {
-                              final rel = relSnap.data ?? const _Relationship.empty();
+                              final rel = relSnap.data ?? const ProfileRelationship.empty();
                               final canMessageBase = rel.isFriends || u.allowMessagesFromNonFriends;
                               final canMessage = canMessageBase && !blocked && !blockedBy;
                               final isFollowing = rel.isFollowing;
@@ -763,8 +574,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                                 }
                                                 if (!mounted) return;
                                                 setState(() {
-                                                  _relationshipFuture = _loadRelationship(widget.userId!);
-                                                  _blockStatusFuture = _loadBlockStatus(widget.userId!);
+                                                  _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
+                                                  _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
                                                 });
                                               } on ApiException catch (e) {
                                                 if (!mounted) return;
@@ -817,8 +628,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         }
                                         if (!mounted) return;
                                         setState(() {
-                                          _blockStatusFuture = _loadBlockStatus(widget.userId!);
-                                          _relationshipFuture = _loadRelationship(widget.userId!);
+                                          _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
+                                          _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
                                         });
                                       } on ApiException catch (e) {
                                         if (!mounted) return;
@@ -848,10 +659,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      FutureBuilder<_BlockStatus>(
+                      FutureBuilder<ProfileBlockStatus>(
                         future: _blockStatusFuture,
                         builder: (context, bSnap) {
-                          final blockedBy = (bSnap.data ?? const _BlockStatus.empty()).isBlockedBy;
+                          final blockedBy = (bSnap.data ?? const ProfileBlockStatus.empty()).isBlockedBy;
                           if (blockedBy) return const SizedBox.shrink();
                           return Column(
                             children: [
@@ -889,6 +700,26 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                         title: 'Подписчики',
                                         value: stats.followersCount,
                                         icon: Icons.person_add,
+                                      ),
+                                      const SizedBox(height: 16),
+                                      FutureBuilder<List<ProfileAchievement>>(
+                                        future: _achievementsFuture,
+                                        builder: (context, aSnap) {
+                                          if (aSnap.connectionState == ConnectionState.waiting) {
+                                            return const AchievementSection(isLoading: true, items: []);
+                                          }
+                                          if (aSnap.hasError) {
+                                            return AchievementSection(
+                                              error: aSnap.error,
+                                              items: const [],
+                                              onRetry: () => setState(() {
+                                                _achievementsFuture =
+                                                    ProfileRepository.fetchUserAchievements(widget.userId!);
+                                              }),
+                                            );
+                                          }
+                                          return AchievementSection(items: aSnap.data ?? const []);
+                                        },
                                       ),
                                     ],
                                   );
@@ -998,7 +829,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     FilledButton.icon(
                       onPressed: () {
                         setState(() {
-                          _statsFuture = _loadStats();
+                          _statsFuture = ProfileRepository.fetchMyStats();
                         });
                       },
                       icon: const Icon(Icons.refresh),
@@ -1035,6 +866,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   value: stats.followersCount,
                   icon: Icons.person_add,
                 ),
+                const SizedBox(height: 20),
+                FutureBuilder<List<ProfileAchievement>>(
+                  future: _achievementsFuture,
+                  builder: (context, aSnap) {
+                    if (aSnap.connectionState == ConnectionState.waiting) {
+                      return const AchievementSection(isLoading: true, items: []);
+                    }
+                    if (aSnap.hasError) {
+                      return AchievementSection(
+                        error: aSnap.error,
+                        items: const [],
+                        onRetry: () => setState(() {
+                          _achievementsFuture = ProfileRepository.fetchMyAchievements();
+                        }),
+                      );
+                    }
+                    return AchievementSection(items: aSnap.data ?? const []);
+                  },
+                ),
                 const SizedBox(height: 24),
                 Text(
                   'Потяните вниз, чтобы обновить',
@@ -1051,6 +901,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
         Text(
           (_bio()?.trim().isNotEmpty == true) ? _bio()!.trim() : '—',
           style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 32),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: _confirmSignOut,
+            icon: const Icon(Icons.logout),
+            label: const Text('Выйти из аккаунта'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+          ),
         ),
       ],
     );

@@ -5,18 +5,21 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_map_marker_cluster/flutter_map_marker_cluster.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../config/event_marker_catalog.dart';
 import '../../models/event.dart';
 import '../../services/api_client.dart';
 import '../../widgets/event_marker_widget.dart';
+import '../../widgets/user_location_pulse_marker.dart';
 import '../events/create_event_details_screen.dart';
 import '../events/create_event_location_screen.dart';
 import '../events/event_details_screen.dart';
 import '../friends/friends_screen.dart';
 import '../profile/profile_screen.dart';
 import '../rooms/my_rooms_screen.dart';
+import '../chat/direct_chat_picker_screen.dart';
 
 import 'widgets/event_preview_card.dart';
 import 'widgets/preview_participant.dart';
@@ -29,11 +32,6 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-enum PreviewPlacement {
-  bottom,
-  center,
-}
-
 class _HomeScreenState extends State<HomeScreen> {
   final MapController _mapController = MapController();
   List<Event> _events = [];
@@ -41,9 +39,42 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Event> _visibleEvents = [];
   Event? _selectedEventPreview;
   bool _previewLoading = false;
-  PreviewPlacement _previewPlacement = PreviewPlacement.bottom;
   Timer? _visibleEventsDebounce;
   Timer? _geoMoveTimer;
+
+  String? _currentUserEmail() {
+    final authBox = Hive.box('authBox');
+    final email = authBox.get('email') as String?;
+    if (email == null || email.trim().isEmpty) return null;
+    return email.trim();
+  }
+
+  bool _isCurrentUserGoing(Event event) {
+    final me = _currentUserEmail();
+    if (me == null) return event.rsvpStatus == 1;
+
+    final inGoingUsers = event.goingUsers.any((e) => e.trim().toLowerCase() == me.toLowerCase());
+    if (inGoingUsers) return true;
+
+    final inGoingProfiles = event.goingUserProfiles.any((p) {
+      final email = p.email;
+      if (email == null) return false;
+      return email.trim().toLowerCase() == me.toLowerCase();
+    });
+    if (inGoingProfiles) return true;
+
+    final inNotGoingUsers = event.notGoingUsers.any((e) => e.trim().toLowerCase() == me.toLowerCase());
+    if (inNotGoingUsers) return false;
+
+    final inNotGoingProfiles = event.notGoingUserProfiles.any((p) {
+      final email = p.email;
+      if (email == null) return false;
+      return email.trim().toLowerCase() == me.toLowerCase();
+    });
+    if (inNotGoingProfiles) return false;
+
+    return event.rsvpStatus == 1;
+  }
 
   @override
   void dispose() {
@@ -109,23 +140,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   List<Event> _parseEventsFromJson(List<dynamic> items) {
     return items.map((raw) {
-      final map = raw as Map<String, dynamic>;
-      return Event(
-        id: map['id'] as String,
-        title: map['title'] as String,
-        description: map['description'] as String? ?? '',
-        lat: (map['lat'] as num).toDouble(),
-        lon: (map['lon'] as num).toDouble(),
-        createdAt: DateTime.parse(map['created_at'] as String),
-        markerColorValue: int.parse(map['marker_color_value'].toString()),
-        markerIconCodePoint: int.parse(map['marker_icon_code'].toString()),
-        rsvpStatus: 0,
-        goingUsers: const [],
-        notGoingUsers: const [],
-        goingUserProfiles: const [],
-        notGoingUserProfiles: const [],
-        endsAt: map['ends_at'] != null ? DateTime.parse(map['ends_at'] as String) : null,
-      );
+      return Event.fromApiMap(Map<String, dynamic>.from(raw as Map));
     }).toList();
   }
 
@@ -197,13 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
         .toList();
   }
 
-  Future<void> _openEventPreview(
-    Event event, {
-    PreviewPlacement placement = PreviewPlacement.bottom,
-  }) async {
+  Future<void> _openEventPreview(Event event) async {
     setState(() {
       _selectedEventPreview = event;
-      _previewPlacement = placement;
       _previewLoading = true;
     });
 
@@ -270,6 +281,57 @@ class _HomeScreenState extends State<HomeScreen> {
         }).toList();
       }
 
+      int parseServerRsvpStatus(Map<String, dynamic> payload, int fallback) {
+        int parseValue(dynamic value) {
+          if (value == null) return 0;
+          if (value is num) {
+            if (value > 0) return 1;
+            if (value < 0) return -1;
+            return 0;
+          }
+
+          final normalized = value.toString().trim().toLowerCase();
+          if (normalized.isEmpty) return 0;
+          if (normalized == '1' ||
+              normalized == 'true' ||
+              normalized == 'going' ||
+              normalized == 'yes' ||
+              normalized == 'accepted') {
+            return 1;
+          }
+          if (normalized == '-1' ||
+              normalized == 'false' ||
+              normalized == 'not_going' ||
+              normalized == 'not-going' ||
+              normalized == 'declined' ||
+              normalized == 'no') {
+            return -1;
+          }
+          final parsed = int.tryParse(normalized);
+          if (parsed == null) return 0;
+          if (parsed > 0) return 1;
+          if (parsed < 0) return -1;
+          return 0;
+        }
+
+        final candidates = [
+          payload['rsvp_status'],
+          payload['rsvpStatus'],
+          payload['current_user_rsvp_status'],
+          payload['currentUserRsvpStatus'],
+          payload['my_rsvp_status'],
+          payload['myRsvpStatus'],
+          payload['status'],
+        ];
+
+        for (final value in candidates) {
+          final parsed = parseValue(value);
+          if (parsed != 0) return parsed;
+        }
+
+        return fallback;
+      }
+
       final base = _events.firstWhere(
         (e) => e.id == event.id,
         orElse: () => event,
@@ -284,7 +346,7 @@ class _HomeScreenState extends State<HomeScreen> {
         createdAt: base.createdAt,
         markerColorValue: base.markerColorValue,
         markerIconCodePoint: base.markerIconCodePoint,
-        rsvpStatus: status,
+        rsvpStatus: parseServerRsvpStatus(data, status),
         goingUsers: parseEmails(goingRaw),
         notGoingUsers: parseEmails(notGoingRaw),
         goingUserProfiles: parseProfiles(goingRaw),
@@ -339,7 +401,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
 
                 Future.delayed(const Duration(milliseconds: 180), () {
-                  _openEventPreview(event, placement: PreviewPlacement.bottom);
+                  _openEventPreview(event);
                 });
               },
             );
@@ -352,12 +414,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _mapRoundIconButton({
     required IconData icon,
     required VoidCallback? onPressed,
+    String? tooltip,
   }) {
     const background = Color(0xFF151922);
     const foreground = Color(0xFFDFE3EC);
     const size = 56.0;
 
-    return SizedBox(
+    final button = SizedBox(
       width: size,
       height: size,
       child: Material(
@@ -370,6 +433,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+    if (tooltip == null || tooltip.isEmpty) return button;
+    return Tooltip(message: tooltip, child: button);
   }
 
   Future<void> _initLocation() async {
@@ -422,6 +487,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
       );
 
+      final me = _currentUserEmail();
       final newEvent = Event(
         id: created['id'] as String,
         title: created['title'] as String,
@@ -431,12 +497,16 @@ class _HomeScreenState extends State<HomeScreen> {
         createdAt: DateTime.parse(created['created_at'] as String),
         markerColorValue: int.parse(created['marker_color_value'].toString()),
         markerIconCodePoint: int.parse(created['marker_icon_code'].toString()),
-        rsvpStatus: 0,
-        goingUsers: const [],
+        rsvpStatus: 1,
+        goingUsers: me != null ? [me] : const [],
         notGoingUsers: const [],
         goingUserProfiles: const [],
         notGoingUserProfiles: const [],
         endsAt: created['ends_at'] != null ? DateTime.parse(created['ends_at'] as String) : null,
+        creatorId: created['created_by_user_id']?.toString(),
+        creatorEmail: created['created_by_email']?.toString(),
+        creatorName: (created['created_by_display_name'] ?? created['created_by_username'])
+            ?.toString(),
       );
 
       setState(() {
@@ -493,27 +563,10 @@ class _HomeScreenState extends State<HomeScreen> {
         : [
             Marker(
               point: _userPosition!,
-              width: 40,
-              height: 40,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  shape: BoxShape.circle,
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.25),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.my_location,
-                  color: Colors.blue,
-                  size: 22,
-                ),
-              ),
+              width: UserLocationPulseMarker.size,
+              height: UserLocationPulseMarker.size,
+              alignment: Alignment.center,
+              child: const UserLocationPulseMarker(),
             ),
           ];
 
@@ -533,7 +586,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() {
                   _selectedEventPreview = null;
                   _previewLoading = false;
-                  _previewPlacement = PreviewPlacement.bottom;
                 });
               },
               onPositionChanged: (position, hasGesture) {
@@ -592,13 +644,9 @@ class _HomeScreenState extends State<HomeScreen> {
             child: _selectedEventPreview == null
                 ? const SizedBox.shrink()
                 : Align(
-                    alignment: _previewPlacement == PreviewPlacement.center
-                        ? Alignment.center
-                        : Alignment.bottomCenter,
+                    alignment: Alignment.bottomCenter,
                     child: Padding(
-                      padding: _previewPlacement == PreviewPlacement.bottom
-                          ? EdgeInsets.fromLTRB(16, 0, 16, previewCardBottom)
-                          : const EdgeInsets.symmetric(horizontal: 16),
+                      padding: EdgeInsets.fromLTRB(16, 0, 16, previewCardBottom),
                       child: Builder(
                         builder: (context) {
                           final event = _selectedEventPreview!;
@@ -621,7 +669,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                           final participants = _participantsForEvent(event);
                           final totalGoing = participants.length;
-                          final isGoing = event.rsvpStatus == 1;
+                          final isGoing = _isCurrentUserGoing(event);
                           final iconLabel =
                               EventMarkerCatalog.categoryLabelForCodePoint(
                             event.markerIconCodePoint,
@@ -723,8 +771,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   },
                 ),
                 _mapRoundIconButton(
-                  icon: Icons.circle_outlined,
-                  onPressed: null, // заглушка
+                  icon: Icons.forum_outlined,
+                  tooltip: 'Написать другу',
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const DirectChatPickerScreen(),
+                      ),
+                    );
+                  },
                 ),
               ],
             ),

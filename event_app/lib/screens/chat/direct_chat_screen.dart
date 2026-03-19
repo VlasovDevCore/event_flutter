@@ -5,6 +5,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:intl/intl.dart';
 
 import '../../services/api_client.dart';
+import '../profile/profile_avatar.dart';
+import '../profile/profile_screen.dart';
 
 class DirectMessage {
   const DirectMessage({
@@ -55,9 +57,53 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   String? _error;
   Timer? _pollTimer;
 
+  /// Имя для шапки: display_name, иначе email, иначе переданный title.
+  String? _peerHeaderName;
+  String? _peerAvatarResolved;
+
   String? get _myUserId {
     final id = Hive.box('authBox').get('userId') as String?;
     return id?.trim().isEmpty == true ? null : id?.trim();
+  }
+
+  String get _titleForAppBar {
+    final n = _peerHeaderName?.trim();
+    if (n != null && n.isNotEmpty) return n;
+    return widget.title;
+  }
+
+  String _initialLetter(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return '?';
+    return t.characters.first.toUpperCase();
+  }
+
+  Future<void> _loadPeerProfile() async {
+    try {
+      final data = await ApiClient.instance.get('/users/${widget.userId}');
+      final displayName =
+          (data['display_name'] ?? data['displayName'])?.toString().trim();
+      final email = data['email']?.toString().trim();
+      final username = data['username']?.toString().trim();
+      final rawAvatar = (data['avatar_url'] ?? data['avatarUrl'])?.toString();
+
+      String? headerName;
+      if (displayName != null && displayName.isNotEmpty) {
+        headerName = displayName;
+      } else if (email != null && email.isNotEmpty) {
+        headerName = email;
+      } else if (username != null && username.isNotEmpty) {
+        headerName = '@$username';
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _peerHeaderName = headerName;
+        _peerAvatarResolved = resolveAvatarUrl(rawAvatar);
+      });
+    } catch (_) {
+      // оставляем widget.title и без аватара
+    }
   }
 
   Future<void> _loadMessages() async {
@@ -159,6 +205,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   @override
   void initState() {
     super.initState();
+    _loadPeerProfile();
     _loadMessages().then((_) => _startPolling());
   }
 
@@ -176,7 +223,47 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     final df = DateFormat('HH:mm');
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title)),
+      appBar: AppBar(
+        titleSpacing: 8,
+        title: Row(
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+              backgroundImage: _peerAvatarResolved != null
+                  ? NetworkImage(_peerAvatarResolved!)
+                  : null,
+              child: _peerAvatarResolved == null
+                  ? Text(
+                      _initialLetter(_titleForAppBar),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    )
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                _titleForAppBar,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          IconButton(
+            tooltip: 'Профиль',
+            icon: const Icon(Icons.person_outline),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => ProfileScreen(userId: widget.userId),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
