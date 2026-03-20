@@ -88,7 +88,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void initState() {
     super.initState();
     _loadEventsFromApi();
-    _initLocation();
+    _initLocation(zoom: 13, immediateZoom: false);
   }
 
   void _animateMapTo(LatLng targetCenter, {required double zoom, Duration duration = const Duration(milliseconds: 650)}) {
@@ -374,70 +374,78 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _openVisibleEventsSheet() {
-    showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      enableDrag: false,
-      showDragHandle: false,
-      builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.45,
-          minChildSize: 0.45,
-          maxChildSize: 0.45,
-          builder: (context, scrollController) {
-            return VisibleEventsSheetContent(
-              visibleEvents: _visibleEvents,
-              scrollController: scrollController,
-              onEventTap: (event) {
-                Navigator.of(context).pop();
-                // Делаем так, чтобы маркер был по центру экрана,
-                // а затем показываем мини-карточку события по центру.
-                _animateMapTo(
-                  LatLng(event.lat, event.lon),
-                  zoom: _mapController.camera.zoom,
-                  duration: const Duration(milliseconds: 650),
-                );
+void _openVisibleEventsSheet() {
+  final screenHeight = MediaQuery.of(context).size.height;
+  
+  showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    enableDrag: false,
+    showDragHandle: false,
+    backgroundColor: Colors.transparent,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (context) {
+      return VisibleEventsSheetContent(
+        visibleEvents: _visibleEvents,
+        sheetHeight: screenHeight,
+        onEventTap: (event) {
+          Navigator.of(context).pop();
+          // Делаем так, чтобы маркер был по центру экрана,
+          // а затем показываем мини-карточку события по центру.
+          _animateMapTo(
+            LatLng(event.lat, event.lon),
+            zoom: _mapController.camera.zoom,
+            duration: const Duration(milliseconds: 650),
+          );
 
-                Future.delayed(const Duration(milliseconds: 180), () {
-                  _openEventPreview(event);
-                });
-              },
-            );
-          },
-        );
-      },
-    );
-  }
+          Future.delayed(const Duration(milliseconds: 180), () {
+            _openEventPreview(event);
+          });
+        },
+      );
+    },
+  );
+}
 
   Widget _mapRoundIconButton({
     required IconData icon,
     required VoidCallback? onPressed,
     String? tooltip,
   }) {
-    const background = Color(0xFF151922);
+    const background = Color(0xCC161616);
+    const pressedBackground = Color(0xFF2C2E36);
     const foreground = Color(0xFFDFE3EC);
     const size = 56.0;
+    const borderRadius = 20.0; // радиус скругления
 
     final button = SizedBox(
       width: size,
       height: size,
       child: Material(
         color: background,
-        shape: const CircleBorder(),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(borderRadius),
+        ),
+        clipBehavior: Clip.antiAlias,
         child: InkWell(
-          borderRadius: const BorderRadius.all(Radius.circular(size / 2)),
+          borderRadius: BorderRadius.circular(borderRadius),
           onTap: onPressed,
-          child: Center(child: Icon(icon, color: foreground)),
+          splashColor: pressedBackground.withOpacity(0.5),
+          highlightColor: pressedBackground,
+          child: Center(
+            child: Icon(icon, color: foreground),
+          ),
         ),
       ),
     );
+    
     if (tooltip == null || tooltip.isEmpty) return button;
     return Tooltip(message: tooltip, child: button);
   }
 
-  Future<void> _initLocation() async {
+  Future<void> _initLocation({double zoom = 16, bool immediateZoom = true}) async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
@@ -448,17 +456,44 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (permission == LocationPermission.deniedForever) return;
 
+    if (!mounted) return;
+
+    final targetZoom = _mapController.camera.zoom < zoom ? zoom : _mapController.camera.zoom;
+    if (immediateZoom && _mapController.camera.zoom != targetZoom) {
+      // Быстро "приближаем" карту, чтобы пользователь видел действие сразу.
+      // Точный переход к координатам произойдёт после получения позиции.
+      _mapController.move(_mapController.camera.center, targetZoom);
+    }
+
+    // 1) Сначала пытаемся быстро взять "кэшированную" позицию,
+    // чтобы камера приближалась сразу, а не после долгого GPS фиксирования.
+    final lastPosition = await Geolocator.getLastKnownPosition();
+
+    if (lastPosition != null) {
+      final userLatLng = LatLng(lastPosition.latitude, lastPosition.longitude);
+      if (!mounted) return;
+
+      setState(() {
+        _userPosition = userLatLng;
+      });
+
+      _animateMapTo(userLatLng, zoom: targetZoom);
+      _recomputeVisibleEvents();
+    }
+
+    // 2) Затем запрашиваем точные координаты и обновляем маркер/камеру.
     final position = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
 
+    if (!mounted) return;
     final userLatLng = LatLng(position.latitude, position.longitude);
 
     setState(() {
       _userPosition = userLatLng;
     });
 
-    _animateMapTo(userLatLng, zoom: 13);
+    _animateMapTo(userLatLng, zoom: targetZoom);
     _recomputeVisibleEvents();
   }
 
@@ -534,8 +569,8 @@ class _HomeScreenState extends State<HomeScreen> {
     const menuBarHeight = 64.0;
     const menuBarBottomInset = 12.0;
     final menuBottom = menuBarBottomInset + bottomPadding;
-    final previewCardBottom = menuBottom + menuBarHeight + 90;
-    final newEventBottom = menuBottom + menuBarHeight + 12;
+    final previewCardBottom = menuBottom + menuBarHeight;
+    final newEventBottom = menuBottom + menuBarHeight + 0;
     final eventMarkers = _events.asMap().entries.map((entry) {
       final event = entry.value;
       final color = Color(event.markerColorValue);
@@ -579,6 +614,7 @@ class _HomeScreenState extends State<HomeScreen> {
             options: MapOptions(
               initialCenter: const LatLng(55.751244, 37.618423),
               initialZoom: 11,
+              minZoom: 10,
               backgroundColor: Colors.transparent,
               interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
               onTap: (_, __) {
@@ -638,7 +674,139 @@ class _HomeScreenState extends State<HomeScreen> {
               MarkerLayer(markers: userMarker),
             ],
           ),
-          AnimatedOpacity(
+          Positioned(
+            top: topPadding + 5,
+            right: 10,
+            child: IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xCC161616),
+                foregroundColor: const Color(0xFFDFE3EC),
+                elevation: 0,
+                padding: const EdgeInsets.all(10),
+                iconSize: 22, 
+              ),
+              icon: const Icon(Icons.person),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const ProfileScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+          Positioned(
+            top: topPadding + 10 + 48,
+            right: 10,
+            child: IconButton(
+              style: IconButton.styleFrom(
+                backgroundColor: const Color(0xCC161616),
+                foregroundColor: const Color(0xFFDFE3EC),
+                elevation: 0,
+                padding: const EdgeInsets.all(10),
+                iconSize: 22, 
+              ),
+              icon: const Icon(Icons.my_location),
+              onPressed: () {
+                _initLocation(zoom: 16);
+              },
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: menuBottom,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _mapRoundIconButton(
+                  icon: Icons.list,
+                  onPressed: _openVisibleEventsSheet,
+                ),
+                _mapRoundIconButton(
+                  icon: Icons.chat,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const MyRoomsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _mapRoundIconButton(
+                  icon: Icons.people,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const FriendsScreen(),
+                      ),
+                    );
+                  },
+                ),
+                _mapRoundIconButton(
+                  icon: Icons.forum_outlined,
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => const DirectChatPickerScreen(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 32,
+            right: 32,
+            bottom: newEventBottom,
+            child: Center(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFF5F57), Color(0xFFFEBC2F)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomLeft,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    shadowColor: Colors.transparent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    minimumSize: const Size(48, 48),
+                    padding: const EdgeInsets.all(12),
+                  ),
+                  onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final initialCenter = _userPosition ?? _mapController.camera.center;
+                    final selected = await navigator.push<LatLng>(
+                      MaterialPageRoute(
+                        builder: (_) => CreateEventLocationScreen(initialCenter: initialCenter),
+                      ),
+                    );
+                    if (!mounted) return;
+                    if (selected == null) return;
+
+                    final created = await navigator.push<Event>(
+                      MaterialPageRoute(
+                        builder: (_) => CreateEventDetailsScreen(position: selected),
+                      ),
+                    );
+                    if (!mounted) return;
+                    if (created == null) return;
+
+                    await _addEvent(created);
+                  },
+                  child: const Icon(Icons.add, color: Colors.white),
+                ),
+              ),
+            ),
+          ),
+         AnimatedOpacity(
             opacity: _selectedEventPreview == null ? 0 : 1,
             duration: const Duration(milliseconds: 180),
             child: _selectedEventPreview == null
@@ -700,127 +868,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                     ),
                   ),
-          ),
-          Positioned(
-            top: topPadding + 10,
-            right: 10,
-            child: IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF151922),
-                foregroundColor: const Color(0xFFDFE3EC),
-                elevation: 0,
-                padding: const EdgeInsets.all(12),
-              ),
-              icon: const Icon(Icons.person),
-              tooltip: 'Профиль',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: topPadding + 10 + 58,
-            right: 10,
-            child: IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xFF151922),
-                foregroundColor: const Color(0xFFDFE3EC),
-                elevation: 0,
-                padding: const EdgeInsets.all(12),
-              ),
-              icon: const Icon(Icons.my_location),
-              tooltip: 'Геопозиция',
-              onPressed: () async {
-                await _initLocation();
-              },
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            bottom: menuBottom,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                _mapRoundIconButton(
-                  icon: Icons.list,
-                  onPressed: _openVisibleEventsSheet,
-                ),
-                _mapRoundIconButton(
-                  icon: Icons.chat,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MyRoomsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _mapRoundIconButton(
-                  icon: Icons.people,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const FriendsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _mapRoundIconButton(
-                  icon: Icons.forum_outlined,
-                  tooltip: 'Написать другу',
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const DirectChatPickerScreen(),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            ),
-          ),
-          Positioned(
-            left: 32,
-            right: 32,
-            bottom: newEventBottom,
-            child: Center(
-              child: FilledButton.icon(
-                style: FilledButton.styleFrom(
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                onPressed: () async {
-                  final navigator = Navigator.of(context);
-                  final initialCenter = _userPosition ?? _mapController.camera.center;
-                  final selected = await navigator.push<LatLng>(
-                    MaterialPageRoute(
-                      builder: (_) => CreateEventLocationScreen(initialCenter: initialCenter),
-                    ),
-                  );
-                  if (!mounted) return;
-                  if (selected == null) return;
-
-                  final created = await navigator.push<Event>(
-                    MaterialPageRoute(
-                      builder: (_) => CreateEventDetailsScreen(position: selected),
-                    ),
-                  );
-                  if (!mounted) return;
-                  if (created == null) return;
-
-                  await _addEvent(created);
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Новое событие'),
-              ),
-            ),
-          ),
+          )
         ],
       ),
       

@@ -61,45 +61,45 @@ class EventPreviewCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF3A2023),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: const Text(
-                    'СОБЫТИЕ',
-                    style: TextStyle(
-                      color: Color(0xFFFF8A8A),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.6,
-                    ),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: markerColor.withOpacity(0.15), // фон из цвета события
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  iconLabel?.toUpperCase() ?? 'СОБЫТИЕ',
+                  style: TextStyle(
+                    color: markerColor, // цвет текста из цвета события
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.6,
                   ),
                 ),
-                const Spacer(),
-                if (remainingLabel != null)
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.access_time_rounded,
-                        size: 14,
+              ),
+              const Spacer(),
+              if (remainingLabel != null)
+                Row(
+                  children: [
+                    const Icon(
+                      Icons.access_time_rounded,
+                      size: 14,
+                      color: Color(0xFFB5BBC7),
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      remainingLabel!,
+                      style: const TextStyle(
                         color: Color(0xFFB5BBC7),
+                        fontSize: 11,
                       ),
-                      const SizedBox(width: 4),
-                      Text(
-                        remainingLabel!,
-                        style: const TextStyle(
-                          color: Color(0xFFB5BBC7),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ),
-              ],
-            ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
             const SizedBox(height: 10),
             Text(
               event.title,
@@ -123,68 +123,7 @@ class EventPreviewCard extends StatelessWidget {
                 ),
               ),
             ],
-            if (iconLabel != null) ...[
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Container(
-                    width: 28,
-                    height: 28,
-                    decoration: BoxDecoration(
-                      color: markerColor,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF23262C),
-                        width: 1.2,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Icon(
-                      IconData(
-                        event.markerIconCodePoint,
-                        fontFamily: 'MaterialIcons',
-                      ),
-                      size: 15,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Flexible(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Категория: $iconLabel',
-                          style: const TextStyle(
-                            color: Color(0xFFB5BBC7),
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Фон: ${_hexColor(markerColor)} • Иконка: ${_hexColor(EventMarkerCatalog.defaultIconColor)}',
-                          style: const TextStyle(
-                            color: Color(0xFF8F96A7),
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              'Придут: ${previewLoading ? '...' : totalGoing}',
-              style: const TextStyle(
-                color: Color(0xFFB5BBC7),
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
             const SizedBox(height: 8),
-            if (previewLoading || totalGoing > 0)
               EventPreviewParticipantsRow(
                 participants: participants,
                 totalGoing: totalGoing,

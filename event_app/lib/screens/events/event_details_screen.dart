@@ -28,6 +28,31 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _savingEdit = false;
   String? _error;
 
+  // Привязка к стилю приложения (темная палитра).
+  static const Color _bg = Color(0xFF161616);
+  static const Color _appBarBg = Color(0xCC161616);
+  static const Color _cardBg = Color(0xFF1C1F26);
+  static const Color _cardBorder = Color(0xFF23262C);
+  static const Color _text = Color(0xFFDFE3EC);
+  static const Color _subtitle = Color(0xFFB5BBC7);
+  static const Color _muted = Color(0xFFAAABB0);
+  static const Color _danger = Color(0xFFFF5F57);
+  static const Color _goingBg = Color(0xFFFF8A8A);
+  static const Color _notGoingBg = Color(0xFF36D3F0);
+  static const Color _secondaryBtnBg = Color(0xFF151922);
+
+  void _openProfileById(String userId) {
+    final rawMyId = Hive.box('authBox').get('userId');
+    final myId = rawMyId?.toString();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => (myId != null && myId == userId)
+            ? const ProfileScreen()
+            : ProfileScreen(userId: userId),
+      ),
+    );
+  }
+
   String? _currentUserEmail() {
     final authBox = Hive.box('authBox');
     final email = authBox.get('email') as String?;
@@ -101,22 +126,32 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
+      useSafeArea: false,
+      backgroundColor: _bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return SafeArea(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  16,
-                  8,
-                  16,
-                  16 + MediaQuery.of(context).viewInsets.bottom,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _bg,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    8,
+                    16,
+                    16 + MediaQuery.of(context).viewInsets.bottom,
+                  ),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
                       Row(
                         children: [
                           EventMarkerWidget(
@@ -128,29 +163,78 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           const SizedBox(width: 12),
                           Text(
                             'Редактирование события',
-                            style: Theme.of(context).textTheme.titleMedium,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                              color: _text,
+                            ),
                           ),
                         ],
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: titleController,
-                        decoration: const InputDecoration(
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Colors.white,
+                        ),
+                        decoration: InputDecoration(
                           labelText: 'Название',
-                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: const Color(0xFF141414),
+                          labelStyle: const TextStyle(color: _subtitle),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: _cardBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: _cardBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: _notGoingBg.withOpacity(0.9), width: 2),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
                       TextField(
                         controller: descriptionController,
                         maxLines: 3,
-                        decoration: const InputDecoration(
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Colors.white,
+                        ),
+                        decoration: InputDecoration(
                           labelText: 'Описание',
-                          border: OutlineInputBorder(),
+                          filled: true,
+                          fillColor: const Color(0xFF141414),
+                          labelStyle: const TextStyle(color: _subtitle),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: _cardBorder),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: const BorderSide(color: _cardBorder),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            borderSide: BorderSide(color: _notGoingBg.withOpacity(0.9), width: 2),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 12),
-                      Text('Цвет', style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Цвет',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -171,7 +255,15 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         }).toList(),
                       ),
                       const SizedBox(height: 12),
-                      Text('Иконка', style: Theme.of(context).textTheme.titleSmall),
+                      Text(
+                        'Иконка',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _text,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
@@ -203,6 +295,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton.icon(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _notGoingBg,
+                            foregroundColor: const Color(0xFF021018),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
                           onPressed: () {
                             final title = titleController.text.trim();
                             if (title.isEmpty) {
@@ -225,7 +325,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                           label: const Text('Сохранить'),
                         ),
                       ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -414,9 +515,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           rsvpStatus: status,
           goingUsers: going,
           notGoingUsers: notGoing,
-          goingUserProfiles: goingProfiles,
-          notGoingUserProfiles: notGoingProfiles,
+          // Если API не вернул профили участников (например, только email/ids),
+          // сохраняем старые, чтобы UI создателя/аватаров не "мигал".
+          goingUserProfiles: goingProfiles.isNotEmpty ? goingProfiles : base.goingUserProfiles,
+          notGoingUserProfiles: notGoingProfiles.isNotEmpty ? notGoingProfiles : base.notGoingUserProfiles,
           endsAt: base.endsAt,
+          creatorId: base.creatorId,
+          creatorEmail: base.creatorEmail,
+          creatorName: base.creatorName,
         );
       });
     } on ApiException catch (e) {
@@ -442,9 +548,56 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final goingSelected = me != null && event.goingUsers.contains(me);
     final goingCount = event.goingUsers.length;
 
+    // Ищем профиль создателя среди полученных профилей участников.
+    final creatorProfiles = <EventUserProfile>[
+      ...event.goingUserProfiles,
+      ...event.notGoingUserProfiles,
+    ];
+    final creatorId = event.creatorId;
+    final creatorEmail = event.creatorEmail;
+    EventUserProfile? creatorProfile;
+    for (final p in creatorProfiles) {
+      if (creatorId != null && creatorId.isNotEmpty && p.id == creatorId) {
+        creatorProfile = p;
+        break;
+      }
+      if (creatorProfile == null &&
+          creatorEmail != null &&
+          creatorEmail.isNotEmpty &&
+          p.email != null &&
+          p.email == creatorEmail) {
+        creatorProfile = p;
+        break;
+      }
+    }
+
+    final creatorTitle = (creatorProfile?.displayName?.isNotEmpty == true)
+        ? creatorProfile!.displayName!
+        : (creatorProfile?.username?.isNotEmpty == true)
+            ? creatorProfile!.username!
+            : (event.creatorName?.isNotEmpty == true ? event.creatorName! : 'Пользователь');
+    final creatorNickname =
+        (creatorProfile?.username?.isNotEmpty == true) ? '@${creatorProfile!.username}' : '—';
+    final creatorResolvedAvatar = resolveAvatarUrl(creatorProfile?.avatarUrl);
+    final creatorBgColor = creatorProfile?.avatarColorValue != null
+        ? Color(creatorProfile!.avatarColorValue!)
+        : const Color(0xFF2A2E37);
+    final creatorIconPoint = creatorProfile?.avatarIconCode ?? Icons.person.codePoint;
+
     return Scaffold(
+      backgroundColor: _bg,
       appBar: AppBar(
-        title: const Text('Подробности события'),
+        backgroundColor: _appBarBg,
+        foregroundColor: _text,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Подробности события',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+          ),
+        ),
         actions: [
           if (_isCreator(event))
             IconButton(
@@ -463,165 +616,353 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_error != null) ...[
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: _cardBg.withOpacity(0.96),
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.35),
+                      blurRadius: 22,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_error != null) ...[
+                      Text(
+                        _error!,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _danger,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                     Text(
-                      _error!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.red),
+                      event.title,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                  ],
-                  Text(
-                    event.title,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Создано: ${dateFormat.format(event.createdAt)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Создатель: ${_creatorLabel(event)}',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  if (event.endsAt != null) ...[
-                    const SizedBox(height: 4),
                     Text(
-                      'Актуально до: ${DateFormat('dd.MM.yyyy HH:mm').format(event.endsAt!)}',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      'Создано: ${dateFormat.format(event.createdAt)}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: _subtitle,
+                        fontSize: 13,
+                      ),
                     ),
-                  ],
-                  const SizedBox(height: 16),
-                  Text(
-                    'Придут: $goingCount',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: FilledButton.icon(
-                          onPressed: () => _setRsvp(goingSelected ? -1 : 1),
-                          icon: Icon(goingSelected ? Icons.close : Icons.check),
-                          label: Text(goingSelected ? 'Не приду' : 'Я приду'),
+                    const SizedBox(height: 4),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141414),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _cardBorder, width: 1),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                        leading: CircleAvatar(
+                          radius: 18,
+                          backgroundColor: creatorBgColor,
+                          backgroundImage: creatorResolvedAvatar != null
+                              ? NetworkImage(creatorResolvedAvatar)
+                              : null,
+                          child: creatorResolvedAvatar != null
+                              ? null
+                              : Icon(
+                                  IconData(creatorIconPoint, fontFamily: 'MaterialIcons'),
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                        ),
+                        title: Text(
+                          creatorTitle,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                        subtitle: Text(
+                          creatorNickname,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: _subtitle,
+                            fontSize: 12,
+                          ),
+                        ),
+                        onTap: (creatorId != null && creatorId.isNotEmpty)
+                            ? () => _openProfileById(creatorId)
+                            : null,
+                      ),
+                    ),
+                    if (event.endsAt != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'Актуально до: ${DateFormat('dd.MM.yyyy HH:mm').format(event.endsAt!)}',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _subtitle,
+                          fontSize: 13,
                         ),
                       ),
                     ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (event.goingUsers.isNotEmpty) ...[
+                    const SizedBox(height: 16),
                     Text(
-                      'Кто придёт:',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'Придут: $goingCount',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: _text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 8),
-                    ...(event.goingUserProfiles.isNotEmpty
-                        ? event.goingUserProfiles.map((u) {
-                            final title = (u.displayName?.isNotEmpty == true)
-                                ? u.displayName!
-                                : (u.username?.isNotEmpty == true
-                                    ? '@${u.username}'
-                                    : (u.email ?? '—'));
-                            final subtitle = u.username?.isNotEmpty == true ? u.email : null;
-                            final resolvedAvatar = resolveAvatarUrl(u.avatarUrl);
-                            final bgColor = u.avatarColorValue != null
-                                ? Color(u.avatarColorValue!)
-                                : const Color(0xFF2A2E37);
-                            final iconPoint = u.avatarIconCode ?? Icons.person.codePoint;
-                            return ListTile(
-                              dense: true,
-                              leading: CircleAvatar(
-                                radius: 18,
-                                backgroundColor: bgColor,
-                                backgroundImage:
-                                    resolvedAvatar != null ? NetworkImage(resolvedAvatar) : null,
-                                child: resolvedAvatar != null
-                                    ? null
-                                    : Icon(
-                                        IconData(iconPoint, fontFamily: 'MaterialIcons'),
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            style: FilledButton.styleFrom(
+                              backgroundColor: goingSelected ? _goingBg : _notGoingBg,
+                              foregroundColor: const Color(0xFF021018),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(999),
                               ),
-                              title: Text(title),
-                              subtitle: subtitle == null
-                                  ? null
-                                  : Text(
-                                      subtitle,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                              onTap: u.id.isEmpty
-                                  ? null
-                                  : () {
-                                      final rawMyId = Hive.box('authBox').get('userId');
-                                      final myId = rawMyId?.toString();
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => (myId != null && myId == u.id)
-                                              ? const ProfileScreen()
-                                              : ProfileScreen(userId: u.id),
-                                        ),
-                                      );
-                                    },
-                            );
-                          })
-                        : event.goingUsers.map(
-                            (name) => ListTile(
-                              dense: true,
-                              leading: const Icon(Icons.person),
-                              title: Text(name),
-                              subtitle: me == name ? const Text('Это вы') : null,
                             ),
-                          )),
-                    const SizedBox(height: 16),
-                  ] else ...[
-                    Text(
-                      'Пока никто не отметил “Я приду”',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  if (event.description.isNotEmpty)
-                    Text(
-                      event.description,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    )
-                  else
-                    Text(
-                      'Описание не указано',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey),
-                    ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Координаты:',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Широта: ${event.lat.toStringAsFixed(5)}\nДолгота: ${event.lon.toStringAsFixed(5)}',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => EventChatScreen(event: event),
+                            onPressed: () => _setRsvp(goingSelected ? -1 : 1),
+                            icon: Icon(
+                              goingSelected ? Icons.close : Icons.check,
+                              color: const Color(0xFF021018),
+                            ),
+                            label: Text(
+                              goingSelected ? 'Не приду' : 'Я приду',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
                           ),
-                        );
-                      },
-                      icon: const Icon(Icons.chat_bubble_outline),
-                      label: const Text('Открыть чат события'),
+                        ),
+                      ],
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    if (event.goingUsers.isNotEmpty) ...[
+                      Text(
+                        'Кто придёт:',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _text,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...(event.goingUserProfiles.isNotEmpty
+                          ? event.goingUserProfiles.map((u) {
+                              final title = (u.displayName?.isNotEmpty == true)
+                                  ? u.displayName!
+                                  : (u.username?.isNotEmpty == true
+                                      ? u.username!
+                                      : 'Пользователь');
+                              final subtitle =
+                                  (u.username?.isNotEmpty == true) ? '@${u.username}' : '—';
+                              final resolvedAvatar = resolveAvatarUrl(u.avatarUrl);
+                              final bgColor = u.avatarColorValue != null
+                                  ? Color(u.avatarColorValue!)
+                                  : const Color(0xFF2A2E37);
+                              final iconPoint = u.avatarIconCode ?? Icons.person.codePoint;
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141414),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: _cardBorder, width: 1),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  leading: CircleAvatar(
+                                    radius: 18,
+                                    backgroundColor: bgColor,
+                                    backgroundImage:
+                                        resolvedAvatar != null ? NetworkImage(resolvedAvatar) : null,
+                                    child: resolvedAvatar != null
+                                        ? null
+                                        : Icon(
+                                            IconData(iconPoint, fontFamily: 'MaterialIcons'),
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                  ),
+                                  title: Text(
+                                    title,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  subtitle: subtitle == null
+                                      ? null
+                                      : Text(
+                                          subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: _subtitle,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                  onTap: u.id.isEmpty
+                                      ? null
+                                      : () => _openProfileById(u.id),
+                                ),
+                              );
+                            })
+                          : event.goingUsers.map((name) {
+                              final raw = name.trim();
+                              final isMe = me != null && raw == me;
+                              final hasAt = raw.contains('@');
+                              final localPart =
+                                  hasAt ? raw.split('@').first.trim() : raw;
+                              final displayName = localPart.isNotEmpty ? localPart : 'Пользователь';
+                              final nickname =
+                                  hasAt && localPart.isNotEmpty ? '@$localPart' : '—';
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF141414),
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(color: _cardBorder, width: 1),
+                                ),
+                                child: ListTile(
+                                  dense: true,
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                                  leading: const Icon(Icons.person, color: Colors.white),
+                                  title: Text(
+                                    displayName,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                    ),
+                                  ),
+                                  subtitle: Text(
+                                    isMe ? 'Это вы' : nickname,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: _subtitle,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              );
+                            })),
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      Text(
+                        'Пока никто не отметил “Я приду”',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _subtitle,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (event.description.isNotEmpty)
+                      Text(
+                        event.description,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _subtitle,
+                          fontSize: 13,
+                        ),
+                      )
+                    else
+                      Text(
+                        'Описание не указано',
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: _subtitle,
+                          fontSize: 13,
+                        ),
+                      ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'Координаты:',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: _text,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Широта: ${event.lat.toStringAsFixed(5)}\nДолгота: ${event.lon.toStringAsFixed(5)}',
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: _subtitle,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: _secondaryBtnBg,
+                          foregroundColor: _text,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => EventChatScreen(event: event),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.chat_bubble_outline, color: _text),
+                        label: const Text(
+                          'Открыть чат события',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
     );
