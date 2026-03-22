@@ -149,8 +149,7 @@ router.get('/:id', async (req, res) => {
 
     const going = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-             u.avatar_color_value, u.avatar_icon_code, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = 1
@@ -160,8 +159,7 @@ router.get('/:id', async (req, res) => {
     );
     const notGoing = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-             u.avatar_color_value, u.avatar_icon_code, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = -1
@@ -259,8 +257,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
 
     const going = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-             u.avatar_color_value, u.avatar_icon_code, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = 1
@@ -270,8 +267,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
     );
     const notGoing = await client.query(
       `
-      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-             u.avatar_color_value, u.avatar_icon_code, u.status
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = -1
@@ -324,15 +320,13 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     const going = await client.query(
-      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-              u.avatar_color_value, u.avatar_icon_code, u.status
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
        FROM event_rsvp r JOIN users u ON u.id = r.user_id
        WHERE r.event_id = $1 AND r.status = 1 ORDER BY r.updated_at ASC`,
       [eventId],
     );
     const notGoing = await client.query(
-      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url,
-              u.avatar_color_value, u.avatar_icon_code, u.status
+      `SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
        FROM event_rsvp r JOIN users u ON u.id = r.user_id
        WHERE r.event_id = $1 AND r.status = -1 ORDER BY r.updated_at ASC`,
       [eventId],

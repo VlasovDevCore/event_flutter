@@ -33,8 +33,6 @@ class ProfileMe {
     required this.bio,
     required this.birthDate,
     required this.gender,
-    required this.avatarColorValue,
-    required this.avatarIconCodePoint,
     required this.avatarUrl,
     required this.allowMessagesFromNonFriends,
     this.createdAt,
@@ -46,8 +44,6 @@ class ProfileMe {
     if (birth is String && birth.isNotEmpty) {
       birthDate = birth.length >= 10 ? birth.substring(0, 10) : birth;
     }
-    final avatarColor = map['avatar_color_value'] ?? map['avatarColorValue'];
-    final avatarIcon = map['avatar_icon_code'] ?? map['avatarIconCodePoint'];
     final avatarUrl = map['avatar_url'] ?? map['avatarUrl'];
     final allowNonFriends = map['allow_messages_from_non_friends'] ?? map['allowMessagesFromNonFriends'];
 
@@ -73,8 +69,6 @@ class ProfileMe {
       bio: (map['bio'] as String?)?.trim(),
       birthDate: birthDate,
       gender: (map['gender'] as String?)?.trim(),
-      avatarColorValue: parseInt(avatarColor),
-      avatarIconCodePoint: parseInt(avatarIcon),
       avatarUrl: (avatarUrl as String?)?.trim(),
       allowMessagesFromNonFriends: allowNonFriends is bool ? allowNonFriends : true,
       createdAt: createdAt,
@@ -88,8 +82,6 @@ class ProfileMe {
   final String? bio;
   final String? birthDate; // YYYY-MM-DD
   final String? gender;
-  final int? avatarColorValue;
-  final int? avatarIconCodePoint;
   final String? avatarUrl;
   final bool allowMessagesFromNonFriends;
   /// Дата регистрации (из API `created_at`).

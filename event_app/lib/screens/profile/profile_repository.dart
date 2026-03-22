@@ -30,8 +30,6 @@ class ProfileRepository {
     await box.put('bio', me.bio);
     await box.put('birthDate', me.birthDate);
     await box.put('gender', me.gender);
-    await box.put('avatarColorValue', me.avatarColorValue);
-    await box.put('avatarIconCodePoint', me.avatarIconCodePoint);
     await box.put('avatarUrl', me.avatarUrl);
     await box.put('allowMessagesFromNonFriends', me.allowMessagesFromNonFriends);
     if (me.createdAt != null) {

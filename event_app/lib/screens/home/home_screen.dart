@@ -374,40 +374,47 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-void _openVisibleEventsSheet() {
-  final screenHeight = MediaQuery.of(context).size.height;
-  
-  showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    enableDrag: false,
-    showDragHandle: false,
-    backgroundColor: Colors.transparent,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (context) {
-      return VisibleEventsSheetContent(
-        visibleEvents: _visibleEvents,
-        sheetHeight: screenHeight,
-        onEventTap: (event) {
-          Navigator.of(context).pop();
-          // Делаем так, чтобы маркер был по центру экрана,
-          // а затем показываем мини-карточку события по центру.
-          _animateMapTo(
-            LatLng(event.lat, event.lon),
-            zoom: _mapController.camera.zoom,
-            duration: const Duration(milliseconds: 650),
-          );
+  void _openVisibleEventsSheet() {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: false,
+      useSafeArea: false,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.78,
+          minChildSize: 0.45,
+          maxChildSize: 1.0,
+          builder: (context, scrollController) {
+            final topInset = MediaQuery.viewPaddingOf(context).top;
+            return VisibleEventsSheetContent(
+              visibleEvents: _visibleEvents,
+              scrollController: scrollController,
+              sheetPadding: EdgeInsets.fromLTRB(
+                0,
+                8 + topInset,
+                16,
+                16 + MediaQuery.viewInsetsOf(context).bottom,
+              ),
+              onEventTap: (event) {
+                Navigator.of(context).pop();
+                _animateMapTo(
+                  LatLng(event.lat, event.lon),
+                  zoom: _mapController.camera.zoom,
+                  duration: const Duration(milliseconds: 650),
+                );
 
-          Future.delayed(const Duration(milliseconds: 180), () {
-            _openEventPreview(event);
-          });
-        },
-      );
-    },
-  );
-}
+                Future.delayed(const Duration(milliseconds: 180), () {
+                  _openEventPreview(event);
+                });
+              },
+            );
+          },
+        );
+      },
+    );
+  }
 
   Widget _mapRoundIconButton({
     required IconData icon,

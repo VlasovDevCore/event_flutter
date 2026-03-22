@@ -6,7 +6,6 @@ class ProfileEditSheetContent extends StatelessWidget {
   const ProfileEditSheetContent({
     super.key,
     required this.email,
-    required this.avatarColorValue,
     required this.avatarUrl,
     required this.savingProfile,
     required this.lastSaveMessage,
@@ -27,7 +26,6 @@ class ProfileEditSheetContent extends StatelessWidget {
   });
 
   final String email;
-  final int avatarColorValue;
   final String? avatarUrl;
   final bool savingProfile;
   final String? lastSaveMessage;
@@ -51,7 +49,7 @@ class ProfileEditSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final avatarColor = Color(avatarColorValue);
+    const placeholderBg = Color(0xFF252525);
     final fullAvatarUrl = resolveAvatarUrl(avatarUrl);
     final statusColor = savingProfile
         ? Colors.grey
@@ -67,7 +65,7 @@ class ProfileEditSheetContent extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 28,
-              backgroundColor: avatarColor,
+              backgroundColor: placeholderBg,
               backgroundImage: fullAvatarUrl == null ? null : NetworkImage(fullAvatarUrl),
               child: fullAvatarUrl != null ? null : const Icon(Icons.person, color: Colors.white),
             ),
@@ -82,7 +80,9 @@ class ProfileEditSheetContent extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    savingProfile ? 'Сохраняю...' : (lastSaveMessage ?? 'Email пока под вопросом'),
+                    savingProfile
+                        ? 'Сохраняю...'
+                        : (lastSaveMessage ?? 'Изменения сохранятся при закрытии'),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(color: statusColor),
                   ),
                 ],

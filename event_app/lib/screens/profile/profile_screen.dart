@@ -152,33 +152,56 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<ProfileRelationship> _relationshipFuture;
   late Future<ProfileBlockStatus> _blockStatusFuture;
   late Future<List<ProfileAchievement>> _achievementsFuture;
+  late Future<void> _profileBootstrapFuture;
   bool _savingProfile = false;
+  bool _reloadingMeProfileAfterEdit = false;
   bool _isBlocked = false;
+
+  void _assignDataFutures() {
+    final isMe = widget.userId == null;
+    _statsFuture = isMe
+        ? ProfileRepository.fetchMyStats()
+        : Future.value(const ProfileStats.empty());
+    _otherUserFuture = isMe
+        ? Future.value(null)
+        : ProfileRepository.fetchUser(widget.userId!);
+    _otherStatsFuture = isMe
+        ? Future.value(const ProfileStats.empty())
+        : ProfileRepository.fetchUserStats(widget.userId!);
+    _relationshipFuture = isMe
+        ? Future.value(const ProfileRelationship.empty())
+        : ProfileRepository.fetchRelationship(widget.userId!);
+    _blockStatusFuture = isMe
+        ? Future.value(const ProfileBlockStatus.empty())
+        : ProfileRepository.fetchBlockStatus(widget.userId!);
+    _achievementsFuture = isMe
+        ? ProfileRepository.fetchMyAchievements()
+        : ProfileRepository.fetchUserAchievements(widget.userId!);
+  }
+
+  Future<void> _computeProfileBootstrapFuture() {
+    final isMe = widget.userId == null;
+    if (isMe) {
+      return Future.wait<Object?>([
+        ProfileRepository.fetchMeAndWriteHive(),
+        _statsFuture,
+        _achievementsFuture,
+      ]).then((_) {});
+    }
+    return Future.wait<Object?>([
+      _otherUserFuture,
+      _otherStatsFuture,
+      _relationshipFuture,
+      _blockStatusFuture,
+      _achievementsFuture,
+    ]).then((_) {});
+  }
 
   @override
   void initState() {
     super.initState();
-    _statsFuture = widget.userId == null
-        ? ProfileRepository.fetchMyStats()
-        : Future.value(const ProfileStats.empty());
-    _otherUserFuture = widget.userId == null
-        ? Future.value(null)
-        : ProfileRepository.fetchUser(widget.userId!);
-    _otherStatsFuture = widget.userId == null
-        ? Future.value(const ProfileStats.empty())
-        : ProfileRepository.fetchUserStats(widget.userId!);
-    _relationshipFuture = widget.userId == null
-        ? Future.value(const ProfileRelationship.empty())
-        : ProfileRepository.fetchRelationship(widget.userId!);
-    _blockStatusFuture = widget.userId == null
-        ? Future.value(const ProfileBlockStatus.empty())
-        : ProfileRepository.fetchBlockStatus(widget.userId!);
-    _achievementsFuture = widget.userId == null
-        ? ProfileRepository.fetchMyAchievements()
-        : ProfileRepository.fetchUserAchievements(widget.userId!);
-    if (widget.userId == null) {
-      ProfileRepository.fetchMeAndWriteHive();
-    }
+    _assignDataFutures();
+    _profileBootstrapFuture = _computeProfileBootstrapFuture();
   }
 
   String? _email() => Hive.box('authBox').get('email') as String?;
@@ -187,10 +210,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _bio() => Hive.box('authBox').get('bio') as String?;
   String? _birthDate() => Hive.box('authBox').get('birthDate') as String?;
   String? _gender() => Hive.box('authBox').get('gender') as String?;
-  int? _avatarColorValue() =>
-      Hive.box('authBox').get('avatarColorValue') as int?;
-  int? _avatarIconCodePoint() =>
-      Hive.box('authBox').get('avatarIconCodePoint') as int?;
   String? _avatarUrl() => Hive.box('authBox').get('avatarUrl') as String?;
   bool _allowMessagesFromNonFriends() =>
       (Hive.box('authBox').get('allowMessagesFromNonFriends') as bool?) ?? true;
@@ -211,8 +230,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       bio: _bio(),
       birthDate: _birthDate(),
       gender: _gender(),
-      avatarColorValue: _avatarColorValue(),
-      avatarIconCodePoint: _avatarIconCodePoint(),
       avatarUrl: _avatarUrl(),
       allowMessagesFromNonFriends: _allowMessagesFromNonFriends(),
       createdAt: _createdAtFromHive(),
@@ -230,20 +247,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     String? birthDate = _birthDate();
     String? gender = _gender();
-    int avatarColorValue = (_avatarColorValue() ?? Colors.blue.toARGB32());
-    int avatarIconCodePoint =
-        (_avatarIconCodePoint() ?? Icons.person.codePoint);
     String? avatarUrl = _avatarUrl();
     bool allowMessagesFromNonFriends = _allowMessagesFromNonFriends();
 
-    Timer? debounce;
     bool disposed = false;
     void Function(void Function())? sheetSetState;
     String? lastSaveMessage;
     bool lastSaveOk = true;
 
-    Future<void> persist() async {
-      if (disposed) return;
+    bool validateDraft() {
       final username = usernameController.text.trim();
       final displayName = displayNameController.text.trim();
       final bio = bioController.text.trim();
@@ -251,25 +263,40 @@ class _ProfileScreenState extends State<ProfileScreen> {
       if (username.isEmpty) {
         lastSaveOk = false;
         lastSaveMessage = 'Никнейм не может быть пустым';
-        sheetSetState?.call(() {});
-        return;
+        return false;
       }
       if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(username)) {
         lastSaveOk = false;
         lastSaveMessage = 'Только латиница, цифры и _';
-        sheetSetState?.call(() {});
-        return;
+        return false;
       }
       if (username.length < 3 || username.length > 24) {
         lastSaveOk = false;
         lastSaveMessage = 'Никнейм: 3–24 символа';
-        sheetSetState?.call(() {});
-        return;
+        return false;
       }
-      if (displayName.isNotEmpty && displayName.length > 40) return;
-      if (bio.length > 500) return;
+      if (displayName.isNotEmpty && displayName.length > 40) {
+        lastSaveOk = false;
+        lastSaveMessage = 'Имя: не больше 40 символов';
+        return false;
+      }
+      if (bio.length > 500) {
+        lastSaveOk = false;
+        lastSaveMessage = 'О себе: не больше 500 символов';
+        return false;
+      }
+      lastSaveOk = true;
+      lastSaveMessage = null;
+      return true;
+    }
 
-      if (!mounted) return;
+    Future<void> saveDraftToServer() async {
+      if (disposed || !mounted) return;
+      final username = usernameController.text.trim();
+      final displayName = displayNameController.text.trim();
+      final bio = bioController.text.trim();
+
+      final messenger = ScaffoldMessenger.of(context);
       setState(() => _savingProfile = true);
       try {
         final data = await ApiClient.instance.put(
@@ -281,8 +308,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'bio': bio.isEmpty ? null : bio,
             'birthDate': birthDate,
             'gender': gender,
-            'avatarColorValue': avatarColorValue,
-            'avatarIconCodePoint': avatarIconCodePoint,
             'allowMessagesFromNonFriends': allowMessagesFromNonFriends,
           },
         );
@@ -293,61 +318,53 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await box.put('bio', me.bio);
         await box.put('birthDate', me.birthDate);
         await box.put('gender', me.gender);
-        await box.put('avatarColorValue', me.avatarColorValue);
-        await box.put('avatarIconCodePoint', me.avatarIconCodePoint);
         await box.put('avatarUrl', me.avatarUrl);
         await box.put(
           'allowMessagesFromNonFriends',
           me.allowMessagesFromNonFriends,
         );
-        lastSaveOk = true;
-        lastSaveMessage = 'Все гуд';
-        sheetSetState?.call(() {});
         if (mounted) setState(() {});
       } on ApiException catch (e) {
-        if (disposed) return;
-        lastSaveOk = false;
-        lastSaveMessage = e.statusCode == 409 ? 'Логин занят' : e.message;
-        sheetSetState?.call(() {});
+        if (disposed || !mounted) return;
+        final msg = e.statusCode == 409 ? 'Логин занят' : e.message;
+        messenger.showSnackBar(SnackBar(content: Text(msg)));
       } catch (e) {
-        if (disposed) return;
-        lastSaveOk = false;
-        lastSaveMessage = 'Ошибка: $e';
-        sheetSetState?.call(() {});
+        if (disposed || !mounted) return;
+        messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       } finally {
         if (mounted) setState(() => _savingProfile = false);
       }
     }
 
-    void schedulePersist() {
-      if (disposed) return;
-      debounce?.cancel();
+    void clearValidationHint() {
+      if (lastSaveMessage == null) return;
       lastSaveMessage = null;
-      debounce = Timer(const Duration(seconds: 1), () {
-        if (disposed) return;
-        persist();
-      });
+      lastSaveOk = true;
+      sheetSetState?.call(() {});
     }
 
-    void onAnyTextChange() => schedulePersist();
+    /// Снимаем слушатели и ссылку на setState шторки сразу после закрытия модалки,
+    /// чтобы IME/фокус не вызывали setState уже размонтированного [StatefulBuilder].
+    void detachEditSheetListeners() {
+      sheetSetState = null;
+      usernameController.removeListener(clearValidationHint);
+      displayNameController.removeListener(clearValidationHint);
+      bioController.removeListener(clearValidationHint);
+    }
 
-    void disposeControllers() {
+    void disposeEditControllers() {
       if (disposed) return;
       disposed = true;
-      debounce?.cancel();
-      usernameController.removeListener(onAnyTextChange);
-      displayNameController.removeListener(onAnyTextChange);
-      bioController.removeListener(onAnyTextChange);
       usernameController.dispose();
       displayNameController.dispose();
       bioController.dispose();
     }
 
-    usernameController.addListener(onAnyTextChange);
-    displayNameController.addListener(onAnyTextChange);
-    bioController.addListener(onAnyTextChange);
+    usernameController.addListener(clearValidationHint);
+    displayNameController.addListener(clearValidationHint);
+    bioController.addListener(clearValidationHint);
 
-    await showModalBottomSheet<void>(
+    final sheetResult = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       showDragHandle: true,
@@ -364,7 +381,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 sheetSetState = setSheetState;
                 return ProfileEditSheetContent(
                   email: _email() ?? '',
-                  avatarColorValue: avatarColorValue,
                   avatarUrl: avatarUrl,
                   savingProfile: _savingProfile,
                   lastSaveMessage: lastSaveMessage,
@@ -439,18 +455,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       currentBirthDate: birthDate,
                     );
                     if (v == null) return;
-                    setSheetState(() => birthDate = v);
-                    schedulePersist();
+                    setSheetState(() {
+                      birthDate = v;
+                      lastSaveMessage = null;
+                    });
                   },
                   onGenderChanged: (v) {
-                    setSheetState(() => gender = v);
-                    schedulePersist();
+                    setSheetState(() {
+                      gender = v;
+                      lastSaveMessage = null;
+                    });
                   },
                   onAllowMessagesFromNonFriendsChanged: (v) {
-                    setSheetState(() => allowMessagesFromNonFriends = v);
-                    schedulePersist();
+                    setSheetState(() {
+                      allowMessagesFromNonFriends = v;
+                      lastSaveMessage = null;
+                    });
                   },
-                  onClose: () => Navigator.of(context).pop(),
+                  onClose: () {
+                    if (!validateDraft()) {
+                      sheetSetState?.call(() {});
+                      return;
+                    }
+                    Navigator.of(context).pop(true);
+                  },
                 );
               },
             );
@@ -459,7 +487,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
       },
     );
 
-    disposeControllers();
+    detachEditSheetListeners();
+
+    final willSave = sheetResult == true || validateDraft();
+    try {
+      if (willSave) {
+        if (mounted) {
+          setState(() => _reloadingMeProfileAfterEdit = true);
+        }
+        await saveDraftToServer();
+      } else if (mounted) {
+        final msg = lastSaveMessage ?? 'Проверьте поля профиля';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _reloadingMeProfileAfterEdit = false);
+      }
+      // [TextField] отцепляется от контроллера не мгновенно; dispose сразу после pop
+      // даёт assert _dependents.isEmpty на [TextEditingController].
+      final done = Completer<void>();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        disposeEditControllers();
+        if (!done.isCompleted) done.complete();
+      });
+      await done.future;
+    }
   }
 
   Future<void> _confirmSignOut() async {
@@ -543,6 +598,28 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  /// Тот же полноэкранный индикатор, что при первом открытии профиля (без скачка контента).
+  Widget _profileScrollableLoadingBody() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final h = constraints.maxHeight;
+        return ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: h > 0 ? h : 400,
+              child: const Center(
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMe = widget.userId == null;
@@ -579,11 +656,59 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _statsFuture;
           await _achievementsFuture;
         },
-        child: FutureBuilder<ProfileMe?>(
-          future: isMe ? Future.value(_meProfileFromHive()) : _otherUserFuture,
-          builder: (context, snap) {
+        child: FutureBuilder<void>(
+          future: _profileBootstrapFuture,
+          builder: (context, bootSnap) {
+            if (bootSnap.connectionState != ConnectionState.done) {
+              return _profileScrollableLoadingBody();
+            }
+            if (bootSnap.hasError) {
+              return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  SizedBox(
+                    height: MediaQuery.sizeOf(context).height * 0.85,
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              bootSnap.error.toString(),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Colors.white70,
+                                  ),
+                            ),
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: () {
+                                setState(() {
+                                  _assignDataFutures();
+                                  _profileBootstrapFuture =
+                                      _computeProfileBootstrapFuture();
+                                });
+                              },
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Повторить'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            }
+            return FutureBuilder<ProfileMe?>(
+              future: isMe ? Future.value(_meProfileFromHive()) : _otherUserFuture,
+              builder: (context, snap) {
+            if (isMe && _reloadingMeProfileAfterEdit) {
+              return _profileScrollableLoadingBody();
+            }
             if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return _profileScrollableLoadingBody();
             }
             if (snap.hasError) {
               return Center(
@@ -647,12 +772,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: ProfileAvatarHeader(
                     headerHeight: 110,
-                    avatarColor: (u.avatarColorValue == null)
-                        ? Colors.blue
-                        : Color(u.avatarColorValue!),
                     avatarUrl: avatarUrl,
-                    avatarIconCodePoint:
-                        u.avatarIconCodePoint ?? Icons.person.codePoint,
                     actionsBar: ProfileActionsBar(
                       onBackPressed: () => Navigator.of(context).pop(),
                       isMe: isMe,
@@ -661,10 +781,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         final myId =
                             Hive.box('authBox').get('userId') as String?;
                         if (myId == null || myId.trim().isEmpty) return;
+                        final box = Hive.box('authBox');
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(
                             builder: (_) => ProfileQrScreen(
                               userId: myId.trim(),
+                              displayName: box.get('displayName') as String?,
+                              username: box.get('username') as String?,
+                              avatarUrl: box.get('avatarUrl') as String?,
                               buildProfileScreen: (scannedId) =>
                                   ProfileScreen(userId: scannedId),
                             ),
@@ -724,6 +848,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               child: Center(
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
+                                  color: Colors.white,
                                 ),
                               ),
                             );
@@ -1087,7 +1212,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 if (statsSnap.connectionState ==
                                     ConnectionState.waiting) {
                                   return const Center(
-                                    child: CircularProgressIndicator(),
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                    ),
                                   );
                                 }
                                 final stats =
@@ -1187,6 +1314,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   },
                 ),
               ],
+            );
+              },
             );
           },
         ),

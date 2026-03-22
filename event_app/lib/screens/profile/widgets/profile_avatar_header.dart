@@ -5,8 +5,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 class ProfileAvatarHeader extends StatelessWidget {
   const ProfileAvatarHeader({
     super.key,
-    required this.avatarColor,
-    required this.avatarIconCodePoint,
     this.avatarUrl,
     this.avatarSize = 120.0,
     this.headerHeight = 110.0,
@@ -31,9 +29,7 @@ class ProfileAvatarHeader extends StatelessWidget {
     this.statusBarHeight = 25.0, // Добавляем параметр для высоты статус-бара
   });
 
-  final Color avatarColor;
   final String? avatarUrl;
-  final int avatarIconCodePoint;
 
   final double avatarSize;
   final double headerHeight;
@@ -169,25 +165,21 @@ class ProfileAvatarHeader extends StatelessWidget {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(avatarInnerRadius),
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: hasPhoto
-                            ? avatarColor
-                            : const Color(0xFF252525),
-                        image: hasPhoto
-                            ? DecorationImage(
+                      decoration: hasPhoto
+                          ? BoxDecoration(
+                              image: DecorationImage(
                                 image: NetworkImage(avatarUrl!.trim()),
                                 fit: BoxFit.cover,
-                              )
-                            : null,
-                      ),
+                              ),
+                            )
+                          : const BoxDecoration(
+                              color: Color(0xFF252525),
+                            ),
                       child: hasPhoto
                           ? null
-                          : Center(
+                          : const Center(
                               child: Icon(
-                                IconData(
-                                  avatarIconCodePoint,
-                                  fontFamily: 'MaterialIcons',
-                                ),
+                                Icons.person,
                                 color: Colors.white70,
                                 size: 34,
                               ),

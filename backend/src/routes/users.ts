@@ -131,8 +131,6 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
              bio,
              birth_date,
              gender,
-             avatar_color_value,
-             avatar_icon_code,
              avatar_url,
              allow_messages_from_non_friends,
              created_at
@@ -176,7 +174,7 @@ router.post(
     try {
       const result = await client.query(
         `UPDATE users SET avatar_url = $1 WHERE id = $2
-         RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, created_at`,
+         RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, created_at`,
         [relativeUrl, userId],
       );
       return res.json(result.rows[0]);
@@ -201,8 +199,6 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     bio,
     birthDate,
     gender,
-    avatarColorValue,
-    avatarIconCodePoint,
     allowMessagesFromNonFriends,
   } = req.body as {
     username?: string | null;
@@ -210,8 +206,6 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     bio?: string | null;
     birthDate?: string | null; // YYYY-MM-DD
     gender?: string | null;
-    avatarColorValue?: number | string | null;
-    avatarIconCodePoint?: number | string | null;
     allowMessagesFromNonFriends?: boolean | null;
   };
 
@@ -291,16 +285,6 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     birthDateSql = normalizedBirthDate;
   }
 
-  const parseBigintLike = (v: number | string | null | undefined) => {
-    if (v === undefined) return undefined;
-    if (v === null) return null;
-    const n = typeof v === 'number' ? v : Number(v);
-    if (!Number.isFinite(n)) return undefined;
-    return Math.trunc(n);
-  };
-
-  const normalizedAvatarColorValue = parseBigintLike(avatarColorValue);
-  const normalizedAvatarIconCode = parseBigintLike(avatarIconCodePoint);
   const normalizedAllowMessages =
     allowMessagesFromNonFriends === undefined ? undefined : Boolean(allowMessagesFromNonFriends);
 
@@ -324,8 +308,6 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     if (normalizedBio !== undefined) add('bio = $', normalizedBio);
     if (birthDateSql !== undefined) add('birth_date = $', birthDateSql);
     if (normalizedGender !== undefined) add('gender = $', normalizedGender);
-    if (normalizedAvatarColorValue !== undefined) add('avatar_color_value = $', normalizedAvatarColorValue);
-    if (normalizedAvatarIconCode !== undefined) add('avatar_icon_code = $', normalizedAvatarIconCode);
     if (normalizedAllowMessages !== undefined) add('allow_messages_from_non_friends = $', normalizedAllowMessages);
 
     if (fields.length === 0) {
@@ -341,7 +323,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
       UPDATE users
       SET ${sets}
       WHERE id = $${fields.length + 1}
-      RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_color_value, avatar_icon_code, avatar_url, allow_messages_from_non_friends, created_at
+      RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, allow_messages_from_non_friends, created_at
       `,
       values,
     );
@@ -478,8 +460,6 @@ router.get('/:id', async (req, res) => {
              bio,
              birth_date,
              gender,
-             avatar_color_value,
-             avatar_icon_code,
              avatar_url,
              allow_messages_from_non_friends,
              created_at

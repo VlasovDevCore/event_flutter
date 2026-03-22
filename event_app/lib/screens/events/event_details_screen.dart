@@ -579,10 +579,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final creatorNickname =
         (creatorProfile?.username?.isNotEmpty == true) ? '@${creatorProfile!.username}' : '—';
     final creatorResolvedAvatar = resolveAvatarUrl(creatorProfile?.avatarUrl);
-    final creatorBgColor = creatorProfile?.avatarColorValue != null
-        ? Color(creatorProfile!.avatarColorValue!)
-        : const Color(0xFF2A2E37);
-    final creatorIconPoint = creatorProfile?.avatarIconCode ?? Icons.person.codePoint;
+    const creatorPlaceholderBg = Color(0xFF2A2E37);
 
     return Scaffold(
       backgroundColor: _bg,
@@ -677,14 +674,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                             const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                         leading: CircleAvatar(
                           radius: 18,
-                          backgroundColor: creatorBgColor,
+                          backgroundColor: creatorPlaceholderBg,
                           backgroundImage: creatorResolvedAvatar != null
                               ? NetworkImage(creatorResolvedAvatar)
                               : null,
                           child: creatorResolvedAvatar != null
                               ? null
-                              : Icon(
-                                  IconData(creatorIconPoint, fontFamily: 'MaterialIcons'),
+                              : const Icon(
+                                  Icons.person,
                                   color: Colors.white,
                                   size: 20,
                                 ),
@@ -785,10 +782,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               final subtitle =
                                   (u.username?.isNotEmpty == true) ? '@${u.username}' : '—';
                               final resolvedAvatar = resolveAvatarUrl(u.avatarUrl);
-                              final bgColor = u.avatarColorValue != null
-                                  ? Color(u.avatarColorValue!)
-                                  : const Color(0xFF2A2E37);
-                              final iconPoint = u.avatarIconCode ?? Icons.person.codePoint;
+                              const listPlaceholderBg = Color(0xFF2A2E37);
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 8),
@@ -802,13 +796,13 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                                   leading: CircleAvatar(
                                     radius: 18,
-                                    backgroundColor: bgColor,
+                                    backgroundColor: listPlaceholderBg,
                                     backgroundImage:
                                         resolvedAvatar != null ? NetworkImage(resolvedAvatar) : null,
                                     child: resolvedAvatar != null
                                         ? null
-                                        : Icon(
-                                            IconData(iconPoint, fontFamily: 'MaterialIcons'),
+                                        : const Icon(
+                                            Icons.person,
                                             color: Colors.white,
                                             size: 20,
                                           ),

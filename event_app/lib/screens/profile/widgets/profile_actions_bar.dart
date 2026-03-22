@@ -277,7 +277,7 @@ class _MenuItem extends StatelessWidget {
         splashColor: splashColor,
         highlightColor: highlightColor,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Icon(

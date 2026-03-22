@@ -292,22 +292,16 @@ class EventUserProfile {
     required this.username,
     required this.displayName,
     required this.avatarUrl,
-    this.avatarColorValue,
-    this.avatarIconCode,
     this.status = 1,
   });
 
   factory EventUserProfile.fromApiMap(Map<String, dynamic> map) {
-    final colorRaw = map['avatar_color_value'] ?? map['avatarColorValue'];
-    final iconRaw = map['avatar_icon_code'] ?? map['avatarIconCode'];
     return EventUserProfile(
       id: map['id']?.toString() ?? '',
       email: map['email']?.toString(),
       username: map['username']?.toString(),
       displayName: (map['display_name'] ?? map['displayName'])?.toString(),
       avatarUrl: (map['avatar_url'] ?? map['avatarUrl'])?.toString(),
-      avatarColorValue: colorRaw is num ? colorRaw.toInt() : int.tryParse('$colorRaw'),
-      avatarIconCode: iconRaw is num ? iconRaw.toInt() : int.tryParse('$iconRaw'),
       status: int.tryParse((map['status'] ?? map['rsvp_status'] ?? 1).toString()) ?? 1,
     );
   }
@@ -319,8 +313,6 @@ class EventUserProfile {
       username: map['username']?.toString(),
       displayName: map['displayName']?.toString(),
       avatarUrl: map['avatarUrl']?.toString(),
-      avatarColorValue: (map['avatarColorValue'] as num?)?.toInt(),
-      avatarIconCode: (map['avatarIconCode'] as num?)?.toInt(),
       status: int.tryParse((map['status'] ?? map['rsvpStatus'] ?? 1).toString()) ?? 1,
     );
   }
@@ -331,8 +323,6 @@ class EventUserProfile {
         'username': username,
         'displayName': displayName,
         'avatarUrl': avatarUrl,
-        if (avatarColorValue != null) 'avatarColorValue': avatarColorValue,
-        if (avatarIconCode != null) 'avatarIconCode': avatarIconCode,
         'status': status,
       };
 
@@ -341,10 +331,6 @@ class EventUserProfile {
   final String? username;
   final String? displayName;
   final String? avatarUrl;
-  /// Цвет круга без фото (как в профиле)
-  final int? avatarColorValue;
-  /// codePoint иконки Material без фото
-  final int? avatarIconCode;
   /// 1 = иду, -1 = не иду, 0 = без статуса
   final int status;
 }
