@@ -34,6 +34,9 @@ class ProfileRepository {
     await box.put('avatarIconCodePoint', me.avatarIconCodePoint);
     await box.put('avatarUrl', me.avatarUrl);
     await box.put('allowMessagesFromNonFriends', me.allowMessagesFromNonFriends);
+    if (me.createdAt != null) {
+      await box.put('createdAt', me.createdAt!.toIso8601String());
+    }
   }
 
   static Future<ProfileStats> fetchMyStats() async {
@@ -42,6 +45,8 @@ class ProfileRepository {
       createdEventsCount: (data['created_events_count'] as num?)?.toInt() ?? 0,
       totalGoingToMyEventsCount: (data['total_going_to_my_events_count'] as num?)?.toInt() ?? 0,
       eventsIGoingCount: (data['events_i_going_count'] as num?)?.toInt() ?? 0,
+      eventsIGoingAsGuestCount:
+          (data['events_i_going_as_guest_count'] as num?)?.toInt() ?? 0,
       followersCount: (data['followers_count'] as num?)?.toInt() ?? 0,
     );
   }
@@ -57,6 +62,8 @@ class ProfileRepository {
       createdEventsCount: (data['created_events_count'] as num?)?.toInt() ?? 0,
       totalGoingToMyEventsCount: (data['total_going_to_my_events_count'] as num?)?.toInt() ?? 0,
       eventsIGoingCount: (data['events_i_going_count'] as num?)?.toInt() ?? 0,
+      eventsIGoingAsGuestCount:
+          (data['events_i_going_as_guest_count'] as num?)?.toInt() ?? 0,
       followersCount: (data['followers_count'] as num?)?.toInt() ?? 0,
     );
   }

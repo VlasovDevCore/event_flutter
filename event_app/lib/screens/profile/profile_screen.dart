@@ -17,17 +17,128 @@ import 'widgets/avatar_crop_dialog.dart';
 import 'widgets/birth_date_numeric_sheet.dart';
 import 'widgets/profile_avatar_header.dart';
 import 'widgets/profile_edit_sheet_content.dart';
-import 'widgets/stat_tile.dart';
 import 'profile_achievement.dart';
+import 'widgets/profile_actions_bar.dart';
+
+String _formatNumber(int number) {
+  if (number >= 1_000_000) {
+    final millions = number / 1_000_000;
+    if (millions == millions.roundToDouble()) {
+      return '${millions.round()} млн';
+    } else {
+      return '${millions.toStringAsFixed(1)} млн';
+    }
+  } else {
+    return number.toString().replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (Match match) => '${match[1]} ',
+    );
+  }
+}
+
+String _dneyRu(int n) {
+  final m = n % 100;
+  if (m >= 11 && m <= 19) return 'дней';
+  switch (n % 10) {
+    case 1:
+      return 'день';
+    case 2:
+    case 3:
+    case 4:
+      return 'дня';
+    default:
+      return 'дней';
+  }
+}
+
+String _nedelRu(int n) {
+  final m = n % 100;
+  if (m >= 11 && m <= 19) return 'недель';
+  switch (n % 10) {
+    case 1:
+      return 'неделю';
+    case 2:
+    case 3:
+    case 4:
+      return 'недели';
+    default:
+      return 'недель';
+  }
+}
+
+String _mesyacevRu(int n) {
+  final m = n % 100;
+  if (m >= 11 && m <= 19) return 'месяцев';
+  switch (n % 10) {
+    case 1:
+      return 'месяц';
+    case 2:
+    case 3:
+    case 4:
+      return 'месяца';
+    default:
+      return 'месяцев';
+  }
+}
+
+String _letRu(int n) {
+  final m = n % 100;
+  if (m >= 11 && m <= 19) return 'лет';
+  switch (n % 10) {
+    case 1:
+      return 'год';
+    case 2:
+    case 3:
+    case 4:
+      return 'года';
+    default:
+      return 'лет';
+  }
+}
+
+/// «Вы с нами уже …» по [createdAt] регистрации.
+String _withUsTenureLine(DateTime? createdAt, bool isMe) {
+  if (createdAt == null) {
+    return 'Дата регистрации неизвестна';
+  }
+  final start = DateTime(createdAt.year, createdAt.month, createdAt.day);
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final days = today.difference(start).inDays;
+  if (days <= 0) {
+    return isMe ? 'Вы с нами с сегодняшнего дня' : 'С нами с сегодняшнего дня';
+  }
+  String wrap(String s) {
+    if (isMe) return 'Вы $s';
+    if (s.isEmpty) return s;
+    return '${s[0].toUpperCase()}${s.substring(1)}';
+  }
+  if (days < 7) {
+    final d = _formatNumber(days);
+    return wrap('с нами уже $d ${_dneyRu(days)}');
+  }
+  if (days < 30) {
+    final w = days ~/ 7;
+    final ws = _formatNumber(w);
+    return wrap('с нами уже $ws ${_nedelRu(w)}');
+  }
+  if (days < 365) {
+    final m = days ~/ 30;
+    final ms = _formatNumber(m);
+    if (m < 1) {
+      final w = days ~/ 7;
+      return wrap('с нами уже ${_formatNumber(w)} ${_nedelRu(w)}');
+    }
+    return wrap('с нами уже $ms ${_mesyacevRu(m)}');
+  }
+  final y = days ~/ 365;
+  final ys = _formatNumber(y);
+  return wrap('с нами уже $ys ${_letRu(y)}');
+}
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({
-    super.key,
-    this.userId,
-  });
+  const ProfileScreen({super.key, this.userId});
 
-  /// Если `null` — показываем и редактируем мой профиль (`/users/me`).
-  /// Если задан — показываем профиль другого пользователя (`/users/:id`) в режиме просмотра.
   final String? userId;
 
   @override
@@ -42,14 +153,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<ProfileBlockStatus> _blockStatusFuture;
   late Future<List<ProfileAchievement>> _achievementsFuture;
   bool _savingProfile = false;
+  bool _isBlocked = false;
 
   @override
   void initState() {
     super.initState();
-    _statsFuture =
-        widget.userId == null ? ProfileRepository.fetchMyStats() : Future.value(const ProfileStats.empty());
-    _otherUserFuture =
-        widget.userId == null ? Future.value(null) : ProfileRepository.fetchUser(widget.userId!);
+    _statsFuture = widget.userId == null
+        ? ProfileRepository.fetchMyStats()
+        : Future.value(const ProfileStats.empty());
+    _otherUserFuture = widget.userId == null
+        ? Future.value(null)
+        : ProfileRepository.fetchUser(widget.userId!);
     _otherStatsFuture = widget.userId == null
         ? Future.value(const ProfileStats.empty())
         : ProfileRepository.fetchUserStats(widget.userId!);
@@ -73,11 +187,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
   String? _bio() => Hive.box('authBox').get('bio') as String?;
   String? _birthDate() => Hive.box('authBox').get('birthDate') as String?;
   String? _gender() => Hive.box('authBox').get('gender') as String?;
-  int? _avatarColorValue() => Hive.box('authBox').get('avatarColorValue') as int?;
-  int? _avatarIconCodePoint() => Hive.box('authBox').get('avatarIconCodePoint') as int?;
+  int? _avatarColorValue() =>
+      Hive.box('authBox').get('avatarColorValue') as int?;
+  int? _avatarIconCodePoint() =>
+      Hive.box('authBox').get('avatarIconCodePoint') as int?;
   String? _avatarUrl() => Hive.box('authBox').get('avatarUrl') as String?;
   bool _allowMessagesFromNonFriends() =>
       (Hive.box('authBox').get('allowMessagesFromNonFriends') as bool?) ?? true;
+
+  DateTime? _createdAtFromHive() {
+    final raw = Hive.box('authBox').get('createdAt');
+    if (raw is String && raw.isNotEmpty) return DateTime.tryParse(raw);
+    return null;
+  }
 
   ProfileMe _meProfileFromHive() {
     final status = (Hive.box('authBox').get('status') as int?) ?? 1;
@@ -93,6 +215,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
       avatarIconCodePoint: _avatarIconCodePoint(),
       avatarUrl: _avatarUrl(),
       allowMessagesFromNonFriends: _allowMessagesFromNonFriends(),
+      createdAt: _createdAtFromHive(),
     );
   }
 
@@ -100,13 +223,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final box = Hive.box('authBox');
 
     final usernameController = TextEditingController(text: _username() ?? '');
-    final displayNameController = TextEditingController(text: _displayName() ?? '');
+    final displayNameController = TextEditingController(
+      text: _displayName() ?? '',
+    );
     final bioController = TextEditingController(text: _bio() ?? '');
 
     String? birthDate = _birthDate();
     String? gender = _gender();
     int avatarColorValue = (_avatarColorValue() ?? Colors.blue.toARGB32());
-    int avatarIconCodePoint = (_avatarIconCodePoint() ?? Icons.person.codePoint);
+    int avatarIconCodePoint =
+        (_avatarIconCodePoint() ?? Icons.person.codePoint);
     String? avatarUrl = _avatarUrl();
     bool allowMessagesFromNonFriends = _allowMessagesFromNonFriends();
 
@@ -170,7 +296,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
         await box.put('avatarColorValue', me.avatarColorValue);
         await box.put('avatarIconCodePoint', me.avatarIconCodePoint);
         await box.put('avatarUrl', me.avatarUrl);
-        await box.put('allowMessagesFromNonFriends', me.allowMessagesFromNonFriends);
+        await box.put(
+          'allowMessagesFromNonFriends',
+          me.allowMessagesFromNonFriends,
+        );
         lastSaveOk = true;
         lastSaveMessage = 'Все гуд';
         sheetSetState?.call(() {});
@@ -196,7 +325,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       lastSaveMessage = null;
       debounce = Timer(const Duration(seconds: 1), () {
         if (disposed) return;
-        // ignore: unawaited_futures
         persist();
       });
     }
@@ -270,7 +398,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       if (!context.mounted) return;
                       final cropped = await showDialog<Uint8List?>(
                         context: context,
-                                    builder: (dialogContext) => AvatarCropDialog(bytes: rawBytes),
+                        builder: (dialogContext) =>
+                            AvatarCropDialog(bytes: rawBytes),
                       );
                       if (cropped == null) return;
 
@@ -360,58 +489,72 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _handleBlock() async {
+    if (widget.userId == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ApiClient.instance.post(
+        '/blocks/block',
+        body: {'userId': widget.userId},
+        withAuth: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isBlocked = true;
+        _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
+        _relationshipFuture = ProfileRepository.fetchRelationship(
+          widget.userId!,
+        );
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    }
+  }
+
+  Future<void> _handleUnblock() async {
+    if (widget.userId == null) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      await ApiClient.instance.post(
+        '/blocks/unblock',
+        body: {'userId': widget.userId},
+        withAuth: true,
+      );
+      if (!mounted) return;
+      setState(() {
+        _isBlocked = false;
+        _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
+        _relationshipFuture = ProfileRepository.fetchRelationship(
+          widget.userId!,
+        );
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMe = widget.userId == null;
 
     return Scaffold(
       backgroundColor: const Color(0xFF161616),
-      appBar: AppBar(
-        title: Text(isMe ? 'Мой профиль' : 'Профиль пользователя'),
-        actions: isMe
-            ? [
-                IconButton(
-                  tooltip: 'Изменить профиль',
-                  onPressed: _savingProfile ? null : _openEditSheet,
-                  icon: _savingProfile
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.edit),
-                ),
-                IconButton(
-                  tooltip: 'QR код профиля',
-                  onPressed: _savingProfile
-                      ? null
-                      : () {
-                          final myId = Hive.box('authBox').get('userId') as String?;
-                          if (myId == null || myId.trim().isEmpty) return;
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => ProfileQrScreen(
-                                userId: myId.trim(),
-                                buildProfileScreen: (scannedId) => ProfileScreen(userId: scannedId),
-                              ),
-                            ),
-                          );
-                        },
-                  icon: const Icon(Icons.qr_code),
-                ),
-                IconButton(
-                  tooltip: 'Выйти',
-                  onPressed: _savingProfile ? null : _confirmSignOut,
-                  icon: const Icon(Icons.logout),
-                ),
-              ]
-            : null,
-      ),
       body: RefreshIndicator(
         onRefresh: () async {
           setState(() {
-            _statsFuture =
-                isMe ? ProfileRepository.fetchMyStats() : Future.value(const ProfileStats.empty());
+            _statsFuture = isMe
+                ? ProfileRepository.fetchMyStats()
+                : Future.value(const ProfileStats.empty());
             _achievementsFuture = isMe
                 ? ProfileRepository.fetchMyAchievements()
                 : ProfileRepository.fetchUserAchievements(widget.userId!);
@@ -421,9 +564,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
           } else {
             setState(() {
               _otherUserFuture = ProfileRepository.fetchUser(widget.userId!);
-              _otherStatsFuture = ProfileRepository.fetchUserStats(widget.userId!);
-              _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
-              _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
+              _otherStatsFuture = ProfileRepository.fetchUserStats(
+                widget.userId!,
+              );
+              _relationshipFuture = ProfileRepository.fetchRelationship(
+                widget.userId!,
+              );
+              _blockStatusFuture = ProfileRepository.fetchBlockStatus(
+                widget.userId!,
+              );
             });
             await _otherUserFuture;
           }
@@ -431,356 +580,701 @@ class _ProfileScreenState extends State<ProfileScreen> {
           await _achievementsFuture;
         },
         child: FutureBuilder<ProfileMe?>(
-            future: isMe ? Future.value(_meProfileFromHive()) : _otherUserFuture,
-            builder: (context, snap) {
-                  if (snap.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  if (snap.hasError) {
-                    return Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(
-                              snap.error.toString(),
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                            ),
-                            const SizedBox(height: 12),
-                            FilledButton.icon(
-                              onPressed: () {
-                                if (!isMe) {
-                                  setState(() {
-                                    _otherUserFuture = ProfileRepository.fetchUser(widget.userId!);
-                                    _otherStatsFuture = ProfileRepository.fetchUserStats(widget.userId!);
-                                    _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
-                                    _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
-                                  });
-                                }
-                              },
-                              icon: const Icon(Icons.refresh),
-                              label: const Text('Повторить'),
-                            ),
-                          ],
+          future: isMe ? Future.value(_meProfileFromHive()) : _otherUserFuture,
+          builder: (context, snap) {
+            if (snap.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (snap.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        snap.error.toString(),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
                         ),
                       ),
-                    );
-                  }
-                  final u = snap.data;
-                  if (u == null) return const SizedBox.shrink();
-                  final title = (u.displayName?.isNotEmpty == true)
-                      ? u.displayName!
-                      : (u.username?.isNotEmpty == true ? '@${u.username}' : 'Профиль');
-                  final subtitle = u.username?.isNotEmpty == true ? '@${u.username}' : (u.email ?? '—');
-                  final avatarUrl = u.resolvedAvatarUrl();
-                  return ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-                    children: [
-                      ProfileAvatarHeader(
-                        headerHeight: 108,
-                        avatarColor: (u.avatarColorValue == null)
-                            ? Colors.blue
-                            : Color(u.avatarColorValue!),
-                        avatarUrl: avatarUrl,
-                        avatarIconCodePoint: u.avatarIconCodePoint ?? Icons.person.codePoint,
+                      const SizedBox(height: 12),
+                      FilledButton.icon(
+                        onPressed: () {
+                          if (!isMe) {
+                            setState(() {
+                              _otherUserFuture = ProfileRepository.fetchUser(
+                                widget.userId!,
+                              );
+                              _otherStatsFuture =
+                                  ProfileRepository.fetchUserStats(
+                                    widget.userId!,
+                                  );
+                              _relationshipFuture =
+                                  ProfileRepository.fetchRelationship(
+                                    widget.userId!,
+                                  );
+                              _blockStatusFuture =
+                                  ProfileRepository.fetchBlockStatus(
+                                    widget.userId!,
+                                  );
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Повторить'),
                       ),
-                      const SizedBox(height: 116),
+                    ],
+                  ),
+                ),
+              );
+            }
+            final u = snap.data;
+            if (u == null) return const SizedBox.shrink();
+            final title = (u.displayName?.isNotEmpty == true)
+                ? u.displayName!
+                : 'Пользователь';
+            final subtitle = u.username?.isNotEmpty == true
+                ? '@${u.username}'
+                : (u.email ?? '—');
+            final avatarUrl = u.resolvedAvatarUrl();
+
+            return ListView(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: ProfileAvatarHeader(
+                    headerHeight: 110,
+                    avatarColor: (u.avatarColorValue == null)
+                        ? Colors.blue
+                        : Color(u.avatarColorValue!),
+                    avatarUrl: avatarUrl,
+                    avatarIconCodePoint:
+                        u.avatarIconCodePoint ?? Icons.person.codePoint,
+                    actionsBar: ProfileActionsBar(
+                      onBackPressed: () => Navigator.of(context).pop(),
+                      isMe: isMe,
+                      onEditPressed: isMe ? _openEditSheet : null,
+                      onQrPressed: () {
+                        final myId =
+                            Hive.box('authBox').get('userId') as String?;
+                        if (myId == null || myId.trim().isEmpty) return;
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ProfileQrScreen(
+                              userId: myId.trim(),
+                              buildProfileScreen: (scannedId) =>
+                                  ProfileScreen(userId: scannedId),
+                            ),
+                          ),
+                        );
+                      },
+                      onLogoutPressed: isMe ? _confirmSignOut : null,
+                      onBlockPressed: !isMe ? _handleBlock : null,
+                      onUnblockPressed: !isMe ? _handleUnblock : null,
+                      isBlocked: _isBlocked,
+                      isSaving: _savingProfile,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 40),
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
                       Padding(
-                        padding: const EdgeInsets.only(top: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.center,
                           children: [
                             Text(
                               title,
                               textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.titleMedium,
+                              style: Theme.of(context).textTheme.titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    fontSize: 37,
+                                    fontFamily: 'Inter',
+                                  ),
                             ),
-                            const SizedBox(height: 6),
+                            const SizedBox(height: 0),
                             Text(
                               subtitle,
                               textAlign: TextAlign.center,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodySmall
-                                  ?.copyWith(color: Colors.grey),
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(
+                                    color: Colors.grey.shade400,
+                                    fontFamily: 'Inter',
+                                  ),
                             ),
                           ],
                         ),
                       ),
                       const SizedBox(height: 16),
-                      FutureBuilder<ProfileBlockStatus>(
-                        future: isMe ? Future.value(const ProfileBlockStatus.empty()) : _blockStatusFuture,
-                        builder: (context, blockSnap) {
-                          final b = blockSnap.data ?? const ProfileBlockStatus.empty();
-                          final blocked = b.isBlocked;
-                          final blockedBy = b.isBlockedBy;
-
-                          Widget actionsWidget = const SizedBox.shrink();
-                          if (!isMe) {
-                            if (blockedBy) {
-                              actionsWidget = Card(
-                                elevation: 0,
-                                color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                child: const Padding(
-                                  padding: EdgeInsets.all(16),
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.block),
-                                      SizedBox(width: 12),
-                                      Expanded(
-                                        child: Text(
-                                          'Вас заблокировали',
-                                          style: TextStyle(fontWeight: FontWeight.w600),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                      FutureBuilder<ProfileStats>(
+                        future: isMe ? _statsFuture : _otherStatsFuture,
+                        builder: (context, statsSnap) {
+                          if (statsSnap.connectionState ==
+                              ConnectionState.waiting) {
+                            return const SizedBox(
+                              height: 40,
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
                                 ),
-                              );
-                            } else {
-                              actionsWidget = FutureBuilder<ProfileRelationship>(
-                                future: _relationshipFuture,
-                                builder: (context, relSnap) {
-                                  final rel = relSnap.data ?? const ProfileRelationship.empty();
-                                  final canMessageBase = rel.isFriends || u.allowMessagesFromNonFriends;
-                                  final canMessage = canMessageBase && !blocked && !blockedBy;
-                                  final isFollowing = rel.isFollowing;
-
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: FilledButton(
-                                          onPressed: (blocked || blockedBy)
-                                              ? null
-                                              : () async {
-                                                  final messenger = ScaffoldMessenger.of(context);
-                                                  try {
-                                                    if (isFollowing) {
-                                                      await ApiClient.instance.post(
-                                                        '/friends/unsubscribe',
-                                                        body: {'toUserId': widget.userId},
-                                                        withAuth: true,
-                                                      );
-                                                    } else {
-                                                      await ApiClient.instance.post(
-                                                        '/friends/subscribe',
-                                                        body: {'toUserId': widget.userId},
-                                                        withAuth: true,
-                                                      );
-                                                    }
-                                                    if (!mounted) return;
-                                                    setState(() {
-                                                      _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
-                                                      _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
-                                                    });
-                                                  } on ApiException catch (e) {
-                                                    if (!mounted) return;
-                                                    messenger.showSnackBar(
-                                                      SnackBar(content: Text(e.message)),
-                                                    );
-                                                  } catch (e) {
-                                                    if (!mounted) return;
-                                                    messenger.showSnackBar(
-                                                      SnackBar(content: Text('Ошибка: $e')),
-                                                    );
-                                                  }
-                                                },
-                                          child: Text(
-                                            isFollowing ? 'Отписаться' : 'Подписаться',
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      IconButton.filledTonal(
-                                        tooltip: canMessage ? 'Сообщение' : 'Нельзя написать',
-                                        onPressed: canMessage
-                                            ? () {
-                                                Navigator.of(context).push(
-                                                  MaterialPageRoute(
-                                                    builder: (_) => DirectChatScreen(
-                                                      userId: widget.userId!,
-                                                      title: title,
-                                                    ),
-                                                  ),
-                                                );
-                                              }
-                                            : null,
-                                        icon: const Icon(Icons.message),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      PopupMenuButton<String>(
-                                        tooltip: 'Действия',
-                                        onSelected: (v) async {
-                                          final messenger = ScaffoldMessenger.of(context);
-                                          try {
-                                            if (v == 'block') {
-                                              await ApiClient.instance.post(
-                                                '/blocks/block',
-                                                body: {'userId': widget.userId},
-                                                withAuth: true,
-                                              );
-                                            } else if (v == 'unblock') {
-                                              await ApiClient.instance.post(
-                                                '/blocks/unblock',
-                                                body: {'userId': widget.userId},
-                                                withAuth: true,
-                                              );
-                                            }
-                                            if (!mounted) return;
-                                            setState(() {
-                                              _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
-                                              _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
-                                            });
-                                          } on ApiException catch (e) {
-                                            if (!mounted) return;
-                                            messenger.showSnackBar(
-                                              SnackBar(content: Text(e.message)),
-                                            );
-                                          } catch (e) {
-                                            if (!mounted) return;
-                                            messenger.showSnackBar(
-                                              SnackBar(content: Text('Ошибка: $e')),
-                                            );
-                                          }
-                                        },
-                                        itemBuilder: (_) => [
-                                          if (!blocked)
-                                            const PopupMenuItem(
-                                              value: 'block',
-                                              child: Text('Заблокировать'),
-                                            )
-                                          else
-                                            const PopupMenuItem(
-                                              value: 'unblock',
-                                              child: Text('Разблокировать'),
-                                            ),
-                                        ],
-                                      ),
-                                    ],
-                                  );
-                                },
-                              );
-                            }
+                              ),
+                            );
                           }
 
-                          final showStats = isMe || !blockedBy;
+                          final stats =
+                              statsSnap.data ?? const ProfileStats.empty();
 
-                          return Column(
+                          return Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              actionsWidget,
-                              if (showStats) const SizedBox(height: 16),
-                              if (showStats)
-                                Column(
-                                  children: [
-                                    FutureBuilder<ProfileStats>(
-                                      future: isMe ? _statsFuture : _otherStatsFuture,
-                                      builder: (context, statsSnap) {
-                                        if (statsSnap.connectionState == ConnectionState.waiting) {
-                                          return const Padding(
-                                            padding: EdgeInsets.only(top: 8, bottom: 8),
-                                            child: Center(child: CircularProgressIndicator()),
-                                          );
-                                        }
-                                        final stats = statsSnap.data ?? const ProfileStats.empty();
-                                        return Column(
-                                          children: [
-                                            StatTile(
-                                              title: 'Сколько встреч я создал',
-                                              value: stats.createdEventsCount,
-                                              icon: Icons.add_box,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            StatTile(
-                                              title: 'Сколько пришли суммарно на мои встречи',
-                                              value: stats.totalGoingToMyEventsCount,
-                                              icon: Icons.groups,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            StatTile(
-                                              title: 'На сколько встреч пришёл я',
-                                              value: stats.eventsIGoingCount,
-                                              icon: Icons.check_circle,
-                                            ),
-                                            const SizedBox(height: 8),
-                                            StatTile(
-                                              title: 'Подписчики',
-                                              value: stats.followersCount,
-                                              icon: Icons.person_add,
-                                            ),
-                                            const SizedBox(height: 16),
-                                            FutureBuilder<List<ProfileAchievement>>(
-                                              future: _achievementsFuture,
-                                              builder: (context, aSnap) {
-                                                if (aSnap.connectionState == ConnectionState.waiting) {
-                                                  return const AchievementSection(isLoading: true, items: []);
-                                                }
-                                                if (aSnap.hasError) {
-                                                  return AchievementSection(
-                                                    error: aSnap.error,
-                                                    items: const [],
-                                                    onRetry: () => setState(() {
-                                                      _achievementsFuture = isMe
-                                                          ? ProfileRepository.fetchMyAchievements()
-                                                          : ProfileRepository.fetchUserAchievements(widget.userId!);
-                                                    }),
-                                                  );
-                                                }
-                                                return AchievementSection(items: aSnap.data ?? const []);
-                                              },
-                                            ),
-                                          ],
-                                        );
-                                      },
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text('О себе', style: Theme.of(context).textTheme.titleMedium),
-                                    const SizedBox(height: 8),
-                                    Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Text(
-                                        (u.bio?.isNotEmpty == true) ? u.bio! : '—',
-                                        style: Theme.of(context).textTheme.bodyMedium,
-                                      ),
-                                    ),
-                                    if (isMe) ...[
-                                      const SizedBox(height: 24),
-                                      SizedBox(
-                                        width: double.infinity,
-                                        child: OutlinedButton.icon(
-                                          onPressed: _confirmSignOut,
-                                          icon: const Icon(Icons.logout),
-                                          label: const Text('Выйти из аккаунта'),
-                                          style: OutlinedButton.styleFrom(
-                                            foregroundColor: Theme.of(context).colorScheme.error,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ],
+                              Container(
+                                margin: const EdgeInsets.only(left: 16),
+                                width: 120,
+                                child: _StatBadge(
+                                  count: stats.followersCount,
+                                  label: 'подписчиков',
                                 ),
+                              ),
+                              Container(
+                                width: 1,
+                                height: 40,
+                                color: const Color.fromARGB(255, 44, 44, 44),
+                              ),
+                              Container(
+                                margin: const EdgeInsets.only(right: 16),
+                                width: 120,
+                                child: _StatBadge(
+                                  count: stats.createdEventsCount,
+                                  label: 'встреч создал',
+                                ),
+                              ),
                             ],
                           );
                         },
                       ),
                     ],
-                  );
-                },
-              ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FutureBuilder<ProfileBlockStatus>(
+                  future: isMe
+                      ? Future.value(const ProfileBlockStatus.empty())
+                      : _blockStatusFuture,
+                  builder: (context, blockSnap) {
+                    final b =
+                        blockSnap.data ?? const ProfileBlockStatus.empty();
+                    final blocked = b.isBlocked;
+                    final blockedBy = b.isBlockedBy;
+
+                    if (blockSnap.hasData && !isMe && mounted) {
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        if (mounted && _isBlocked != blocked) {
+                          setState(() {
+                            _isBlocked = blocked;
+                          });
+                        }
+                      });
+                    }
+
+                    Widget actionsWidget = const SizedBox.shrink();
+                    if (!isMe) {
+                      if (blockedBy) {
+                        actionsWidget = Card(
+                          elevation: 0,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHighest,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(16),
+                            child: Row(
+                              children: [
+                                Icon(Icons.block),
+                                SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    'Вас заблокировали',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      } else {
+                        actionsWidget = FutureBuilder<ProfileRelationship>(
+                          future: _relationshipFuture,
+                          builder: (context, relSnap) {
+                            final rel =
+                                relSnap.data ??
+                                const ProfileRelationship.empty();
+                            final canMessageBase =
+                                rel.isFriends || u.allowMessagesFromNonFriends;
+                            final canMessage =
+                                canMessageBase && !blocked && !blockedBy;
+                            final isFollowing = rel.isFollowing;
+
+                            // Определяем, заблокирован ли пользователь
+                            final isUserBlocked = blocked;
+
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: Opacity(
+                                    opacity: isUserBlocked ? 0.5 : 1.0,
+                                    child: FilledButton(
+                                      onPressed: (blocked || blockedBy)
+                                          ? null
+                                          : () async {
+                                              final messenger =
+                                                  ScaffoldMessenger.of(context);
+                                              try {
+                                                if (isFollowing) {
+                                                  await ApiClient.instance.post(
+                                                    '/friends/unsubscribe',
+                                                    body: {
+                                                      'toUserId': widget.userId,
+                                                    },
+                                                    withAuth: true,
+                                                  );
+                                                } else {
+                                                  await ApiClient.instance.post(
+                                                    '/friends/subscribe',
+                                                    body: {
+                                                      'toUserId': widget.userId,
+                                                    },
+                                                    withAuth: true,
+                                                  );
+                                                }
+                                                if (!mounted) return;
+                                                setState(() {
+                                                  _relationshipFuture =
+                                                      ProfileRepository.fetchRelationship(
+                                                        widget.userId!,
+                                                      );
+                                                  _blockStatusFuture =
+                                                      ProfileRepository.fetchBlockStatus(
+                                                        widget.userId!,
+                                                      );
+                                                });
+                                              } on ApiException catch (e) {
+                                                if (!mounted) return;
+                                                messenger.showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(e.message),
+                                                  ),
+                                                );
+                                              } catch (e) {
+                                                if (!mounted) return;
+                                                messenger.showSnackBar(
+                                                  SnackBar(
+                                                    content: Text('Ошибка: $e'),
+                                                  ),
+                                                );
+                                              }
+                                            },
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: isFollowing
+                                            ? const Color.fromARGB(
+                                                255,
+                                                44,
+                                                44,
+                                                44,
+                                              )
+                                            : const Color.fromARGB(
+                                                255,
+                                                0,
+                                                122,
+                                                255,
+                                              ),
+                                        foregroundColor: Colors.white,
+                                        disabledForegroundColor: Colors
+                                            .white, // Белый текст при disabled
+                                        disabledBackgroundColor: isFollowing
+                                            ? const Color.fromARGB(
+                                                255,
+                                                44,
+                                                44,
+                                                44,
+                                              )
+                                            : const Color.fromARGB(
+                                                255,
+                                                0,
+                                                122,
+                                                255,
+                                              ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            isFollowing
+                                                ? Icons.person_remove
+                                                : Icons.person_add,
+                                            size: 18,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            isFollowing
+                                                ? 'Отписаться'
+                                                : 'Подписаться',
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Opacity(
+                                    opacity: isUserBlocked ? 0.5 : 1.0,
+                                    child: FilledButton(
+                                      onPressed: canMessage
+                                          ? () {
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      DirectChatScreen(
+                                                        userId: widget.userId!,
+                                                        title: title,
+                                                      ),
+                                                ),
+                                              );
+                                            }
+                                          : null,
+                                      style: FilledButton.styleFrom(
+                                        backgroundColor: const Color.fromARGB(
+                                          255,
+                                          44,
+                                          44,
+                                          44,
+                                        ),
+                                        foregroundColor: Colors.white,
+                                        disabledForegroundColor: Colors
+                                            .white, // Белый текст при disabled
+                                        disabledBackgroundColor:
+                                            const Color.fromARGB(
+                                              255,
+                                              44,
+                                              44,
+                                              44,
+                                            ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
+                                          ),
+                                        ),
+                                        textStyle: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                        elevation: 0,
+                                      ),
+                                      child: const Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(Icons.message, size: 18),
+                                          SizedBox(width: 8),
+                                          Text('Сообщение'),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      }
+                    }
+
+                    final showStats = isMe || !blockedBy;
+
+                    return Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              actionsWidget,
+                              const SizedBox(height: 16), 
+                              const Divider(
+                                color: Color.fromARGB(144, 44, 44, 44),
+                                height: 1,
+                                thickness: 1,
+                              ),
+                              const SizedBox(height: 16),
+                              if (!blockedBy) ...[
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    'О себе',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleMedium
+                                        ?.copyWith(
+                                          color: Colors.white,
+                                          fontFamily: 'Inter',
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 19,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    u.bio?.isNotEmpty == true
+                                        ? u.bio!
+                                        : (isMe
+                                            ? 'Вы ещё ничего не рассказали о себе.'
+                                            : 'Пользователь ничего не рассказал о себе.'),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodyMedium
+                                        ?.copyWith(
+                                          fontFamily: 'Inter',
+                                          color: u.bio?.isNotEmpty == true
+                                              ? Colors.white
+                                              : Colors.grey.shade500,
+                                        ),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                              ],
+                            ],
+                          ),
+                        ),
+                        if (showStats) ...[
+                          SizedBox(
+                            height: 100,
+                            child: FutureBuilder<ProfileStats>(
+                              future: isMe ? _statsFuture : _otherStatsFuture,
+                              builder: (context, statsSnap) {
+                                if (statsSnap.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const Center(
+                                    child: CircularProgressIndicator(),
+                                  );
+                                }
+                                final stats =
+                                    statsSnap.data ??
+                                    const ProfileStats.empty();
+
+                                return ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  physics: const BouncingScrollPhysics(),
+                                  padding: EdgeInsets.zero,
+                                  itemCount: 4,
+                                  itemBuilder: (context, index) {
+                                    final items = [
+                                      _StatCard(
+                                        value: stats.createdEventsCount,
+                                        label: 'Создал встреч',
+                                      ),
+                                      _StatCard(
+                                        value: stats.totalGoingToMyEventsCount,
+                                        label: 'Посетителей',
+                                      ),
+                                      _StatCard(
+                                        value: stats.eventsIGoingCount,
+                                        label: 'Посетил встреч',
+                                      ),
+                                      _StatCard(
+                                        value: stats.followersCount,
+                                        label: 'Подписчиков',
+                                      ),
+                                    ];
+                                    return _StatCard(
+                                      value: items[index].value,
+                                      label: items[index].label,
+                                      isFirst: index == 0,
+                                      isLast: index == 3,
+                                    );
+                                  },
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: FutureBuilder<List<ProfileAchievement>>(
+                              future: _achievementsFuture,
+                              builder: (context, aSnap) {
+                                if (aSnap.connectionState ==
+                                    ConnectionState.waiting) {
+                                  return const AchievementSection(
+                                    isLoading: true,
+                                    items: [],
+                                  );
+                                }
+                                if (aSnap.hasError) {
+                                  return AchievementSection(
+                                    error: aSnap.error,
+                                    items: const [],
+                                    onRetry: () => setState(() {
+                                      _achievementsFuture = isMe
+                                          ? ProfileRepository.fetchMyAchievements()
+                                          : ProfileRepository.fetchUserAchievements(
+                                              widget.userId!,
+                                            );
+                                    }),
+                                  );
+                                }
+                                return AchievementSection(
+                                  items: aSnap.data ?? const [],
+                                );
+                              },
+                            ),
+                          ),
+                          
+                          const SizedBox(height: 16),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Text(
+                              _withUsTenureLine(u.createdAt, isMe),
+                              textAlign: TextAlign.center,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Color.fromARGB(255, 77, 77, 77),
+                                    fontFamily: 'Inter',
+                                    fontSize: 22,
+                                    fontWeight: FontWeight.w600,
+                                    height: 1.4,
+                                  ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ],
+                    );
+                  },
+                ),
+              ],
+            );
+          },
+        ),
       ),
     );
   }
-
-  // _buildMyProfile удалён: визуальная часть теперь отрисовывается в одном общем FutureBuilder
-  // (различия только в состоянии кнопок и показе кнопки "Выйти из аккаунта").
 }
 
-// Helpers moved to separate files:
-// - `ProfileMe`, `ProfileStats` in `profile_models.dart`
-// - avatar helpers in `profile_avatar.dart`
-// - `StatTile` in `widgets/stat_tile.dart`
+class _StatBadge extends StatelessWidget {
+  const _StatBadge({required this.count, required this.label});
 
+  final int count;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Text(
+          _formatNumber(count),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'Inter',
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.grey.shade500,
+            fontSize: 12,
+            fontFamily: 'Inter',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.value,
+    required this.label,
+    this.isFirst = false,
+    this.isLast = false,
+  });
+
+  final int value;
+  final String label;
+  final bool isFirst;
+  final bool isLast;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 140,
+      margin: EdgeInsets.only(left: isFirst ? 16 : 0, right: isLast ? 16 : 12),
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(255, 28, 28, 28),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            _formatNumber(value),
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              fontFamily: 'Inter',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.grey.shade500,
+              fontSize: 13,
+              fontFamily: 'Inter',
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+}

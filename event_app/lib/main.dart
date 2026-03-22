@@ -1,6 +1,6 @@
 import 'dart:async';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; // 👈 Добавьте этот импорт
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
 
@@ -12,6 +12,24 @@ final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Edge-to-edge: иначе на Android 15+ стиль статус-бара может сбрасываться.
+  await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+
+  // Светлые (белые) иконки часов/сети/батареи на тёмном фоне.
+  // В Flutter: Brightness.dark = светлые иконки; Brightness.light = тёмные.
+  SystemChrome.setSystemUIOverlayStyle(
+    const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      statusBarBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.black,
+      systemNavigationBarIconBrightness: Brightness.dark,
+      systemStatusBarContrastEnforced: false,
+      systemNavigationBarContrastEnforced: false,
+    ),
+  );
+
   await Hive.initFlutter();
   await Hive.openBox('authBox');
   await Hive.openBox('eventsBox');
@@ -85,6 +103,14 @@ class _EventAppState extends State<EventApp> {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         useMaterial3: true,
+        appBarTheme: const AppBarTheme(
+          systemOverlayStyle: SystemUiOverlayStyle(
+            statusBarColor: Colors.transparent,
+            statusBarIconBrightness: Brightness.dark,
+            statusBarBrightness: Brightness.dark,
+            systemStatusBarContrastEnforced: false,
+          ),
+        ),
       ),
       home: isLoggedIn ? const HomeScreen() : const AuthScreen(),
     );

@@ -76,7 +76,7 @@ router.post('/login', async (req, res) => {
   const client = await pool.connect();
   try {
     const result = await client.query(
-      'SELECT id, email, username, status, password_hash FROM users WHERE email = $1',
+      'SELECT id, email, username, status, password_hash, created_at FROM users WHERE email = $1',
       [email],
     );
     if (result.rowCount === 0) {
@@ -99,6 +99,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         username: user.username ?? null,
         status: user.status,
+        created_at: user.created_at,
       },
       token,
     });

@@ -22,7 +22,9 @@ async function getUserEventStats(client: PoolClient, userId: string): Promise<Us
         SELECT COUNT(r.user_id)::int AS going_count
         FROM events e
         LEFT JOIN event_rsvp r
-          ON r.event_id = e.id AND r.status = 1
+          ON r.event_id = e.id
+          AND r.status = 1
+          AND r.user_id <> e.created_by
         WHERE e.created_by = $1
         GROUP BY e.id
       ) x
@@ -35,6 +37,19 @@ async function getUserEventStats(client: PoolClient, userId: string): Promise<Us
     [userId],
   );
 
+  const eventsIGoingAsGuest = await client.query(
+    `
+      SELECT COUNT(*)::int AS count
+      FROM event_rsvp r
+      INNER JOIN events e ON e.id = r.event_id
+      WHERE r.user_id = $1
+        AND r.status = 1
+        AND e.created_by IS NOT NULL
+        AND e.created_by <> r.user_id
+      `,
+    [userId],
+  );
+
   const followers = await client.query(
     `SELECT COUNT(*)::int AS count FROM friend_requests WHERE to_user_id = $1`,
     [userId],
@@ -44,6 +59,7 @@ async function getUserEventStats(client: PoolClient, userId: string): Promise<Us
     created_events_count: (createdEvents.rows[0] as { count: number }).count,
     total_going_to_my_events_count: (totalGoingToMyEvents.rows[0] as { count: number }).count,
     events_i_going_count: (eventsIGoing.rows[0] as { count: number }).count,
+    events_i_going_as_guest_count: (eventsIGoingAsGuest.rows[0] as { count: number }).count,
     followers_count: (followers.rows[0] as { count: number }).count,
   };
 }

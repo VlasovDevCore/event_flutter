@@ -5,6 +5,7 @@ class ProfileStats {
     required this.createdEventsCount,
     required this.totalGoingToMyEventsCount,
     required this.eventsIGoingCount,
+    required this.eventsIGoingAsGuestCount,
     required this.followersCount,
   });
 
@@ -12,11 +13,14 @@ class ProfileStats {
       : createdEventsCount = 0,
         totalGoingToMyEventsCount = 0,
         eventsIGoingCount = 0,
+        eventsIGoingAsGuestCount = 0,
         followersCount = 0;
 
   final int createdEventsCount;
   final int totalGoingToMyEventsCount;
   final int eventsIGoingCount;
+  /// «Приду» на чужих встречах (не как создатель своей).
+  final int eventsIGoingAsGuestCount;
   final int followersCount;
 }
 
@@ -33,6 +37,7 @@ class ProfileMe {
     required this.avatarIconCodePoint,
     required this.avatarUrl,
     required this.allowMessagesFromNonFriends,
+    this.createdAt,
   });
 
   factory ProfileMe.fromApi(Map<String, dynamic> map) {
@@ -53,6 +58,12 @@ class ProfileMe {
       return int.tryParse(v.toString());
     }
 
+    DateTime? createdAt;
+    final createdRaw = map['created_at'] ?? map['createdAt'];
+    if (createdRaw is String && createdRaw.isNotEmpty) {
+      createdAt = DateTime.tryParse(createdRaw);
+    }
+
     return ProfileMe(
       email: (map['email'] as String?)?.trim(),
       username: (map['username'] as String?)?.trim(),
@@ -66,6 +77,7 @@ class ProfileMe {
       avatarIconCodePoint: parseInt(avatarIcon),
       avatarUrl: (avatarUrl as String?)?.trim(),
       allowMessagesFromNonFriends: allowNonFriends is bool ? allowNonFriends : true,
+      createdAt: createdAt,
     );
   }
 
@@ -80,6 +92,8 @@ class ProfileMe {
   final int? avatarIconCodePoint;
   final String? avatarUrl;
   final bool allowMessagesFromNonFriends;
+  /// Дата регистрации (из API `created_at`).
+  final DateTime? createdAt;
 
   String? resolvedAvatarUrl() => resolveAvatarUrl(avatarUrl);
 }
