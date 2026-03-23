@@ -32,6 +32,11 @@ class ProfileRepository {
     await box.put('gender', me.gender);
     await box.put('avatarUrl', me.avatarUrl);
     await box.put('allowMessagesFromNonFriends', me.allowMessagesFromNonFriends);
+    if (me.coverGradientColors != null && me.coverGradientColors!.length == 3) {
+      await box.put('coverGradientColors', me.coverGradientColors);
+    } else {
+      await box.delete('coverGradientColors');
+    }
     if (me.createdAt != null) {
       await box.put('createdAt', me.createdAt!.toIso8601String());
     }

@@ -132,7 +132,7 @@ class _BirthDateNumericSheetState extends State<_BirthDateNumericSheet> {
     return Padding(
       padding: EdgeInsets.fromLTRB(
         16,
-        4,
+        0,
         16,
         16 + MediaQuery.of(context).viewInsets.bottom,
       ),
@@ -141,7 +141,7 @@ class _BirthDateNumericSheetState extends State<_BirthDateNumericSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
+            padding: const EdgeInsets.only(bottom: 16),
             child: Column(
               children: [
                 Text(
@@ -273,7 +273,7 @@ Future<String?> showBirthDateNumericSheet(
   return await showModalBottomSheet<String?>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: false,
+    showDragHandle: true,
     useSafeArea: true,
     backgroundColor: _BirthDateNumericSheetState.popupBg,
     shape: const RoundedRectangleBorder(

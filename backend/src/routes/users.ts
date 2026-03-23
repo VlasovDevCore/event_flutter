@@ -77,6 +77,21 @@ function todayFolderName() {
   return new Date().toISOString().slice(0, 10);
 }
 
+const HEX6 = /^#[0-9A-Fa-f]{6}$/;
+
+/** 3 hex-цвета #RRGGBB или null (сброс). undefined — поле не трогать. */
+function parseCoverGradientColors(input: unknown): string[] | null | undefined {
+  if (input === undefined) return undefined;
+  if (input === null) return null;
+  if (!Array.isArray(input) || input.length !== 3) return undefined;
+  const out: string[] = [];
+  for (const x of input) {
+    if (typeof x !== 'string' || !HEX6.test(x)) return undefined;
+    out.push(x);
+  }
+  return out;
+}
+
 const uploadAvatar = multer({
   storage: multer.diskStorage({
     destination: (_req, _file, cb) => {
@@ -132,6 +147,7 @@ router.get('/me', authMiddleware, async (req: AuthRequest, res) => {
              birth_date,
              gender,
              avatar_url,
+             cover_gradient_colors,
              allow_messages_from_non_friends,
              created_at
       FROM users
@@ -174,7 +190,7 @@ router.post(
     try {
       const result = await client.query(
         `UPDATE users SET avatar_url = $1 WHERE id = $2
-         RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, created_at`,
+         RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, cover_gradient_colors, created_at`,
         [relativeUrl, userId],
       );
       return res.json(result.rows[0]);
@@ -200,6 +216,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     birthDate,
     gender,
     allowMessagesFromNonFriends,
+    coverGradientColors,
   } = req.body as {
     username?: string | null;
     displayName?: string | null;
@@ -207,6 +224,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     birthDate?: string | null; // YYYY-MM-DD
     gender?: string | null;
     allowMessagesFromNonFriends?: boolean | null;
+    coverGradientColors?: string[] | null;
   };
 
   const normalizedUsername =
@@ -288,6 +306,11 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
   const normalizedAllowMessages =
     allowMessagesFromNonFriends === undefined ? undefined : Boolean(allowMessagesFromNonFriends);
 
+  const parsedCoverGradient = parseCoverGradientColors(coverGradientColors);
+  if (coverGradientColors !== undefined && parsedCoverGradient === undefined) {
+    return res.status(400).json({ error: 'Invalid coverGradientColors (need 3 strings like #RRGGBB)' });
+  }
+
   const client = await pool.connect();
   try {
     if (normalizedUsername) {
@@ -300,8 +323,13 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
       }
     }
 
-    const fields: { sql: string; value: unknown }[] = [];
-    const add = (sql: string, value: unknown) => fields.push({ sql, value });
+    type SetField = { sql: string; value: unknown; suffix?: string };
+    const fields: SetField[] = [];
+    const add = (sql: string, value: unknown, suffix?: string) => {
+      const row: SetField = { sql, value };
+      if (suffix !== undefined) row.suffix = suffix;
+      fields.push(row);
+    };
 
     if (normalizedUsername !== undefined) add('username = $', normalizedUsername);
     if (normalizedDisplayName !== undefined) add('display_name = $', normalizedDisplayName);
@@ -309,12 +337,19 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
     if (birthDateSql !== undefined) add('birth_date = $', birthDateSql);
     if (normalizedGender !== undefined) add('gender = $', normalizedGender);
     if (normalizedAllowMessages !== undefined) add('allow_messages_from_non_friends = $', normalizedAllowMessages);
+    if (parsedCoverGradient !== undefined) {
+      add(
+        'cover_gradient_colors = $',
+        parsedCoverGradient === null ? null : JSON.stringify(parsedCoverGradient),
+        '::jsonb',
+      );
+    }
 
     if (fields.length === 0) {
       return res.status(400).json({ error: 'Nothing to update' });
     }
 
-    const sets = fields.map((f, idx) => `${f.sql}${idx + 1}`).join(', ');
+    const sets = fields.map((f, idx) => `${f.sql}${idx + 1}${f.suffix ?? ''}`).join(', ');
     const values = fields.map((f) => f.value);
     values.push(userId);
 
@@ -323,7 +358,7 @@ router.put('/me', authMiddleware, async (req: AuthRequest, res) => {
       UPDATE users
       SET ${sets}
       WHERE id = $${fields.length + 1}
-      RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, allow_messages_from_non_friends, created_at
+      RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, cover_gradient_colors, allow_messages_from_non_friends, created_at
       `,
       values,
     );
@@ -461,6 +496,7 @@ router.get('/:id', async (req, res) => {
              birth_date,
              gender,
              avatar_url,
+             cover_gradient_colors,
              allow_messages_from_non_friends,
              created_at
       FROM users

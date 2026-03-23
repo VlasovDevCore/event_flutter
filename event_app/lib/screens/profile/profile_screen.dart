@@ -15,7 +15,9 @@ import 'profile_repository.dart';
 import 'profile_social_models.dart';
 import 'widgets/achievement_section.dart';
 import 'widgets/birth_date_numeric_sheet.dart';
+import 'profile_cover_gradient.dart';
 import 'widgets/profile_avatar_header.dart';
+import 'widgets/profile_cover_edit_sheet.dart';
 import 'widgets/profile_edit_sheet_content.dart';
 import 'profile_achievement.dart';
 import 'widgets/profile_actions_bar.dart';
@@ -220,6 +222,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return null;
   }
 
+  List<String>? _coverGradientColorsFromHive() {
+    final raw = Hive.box('authBox').get('coverGradientColors');
+    if (raw is List && raw.length == 3) {
+      return raw.map((e) => e.toString()).toList();
+    }
+    return null;
+  }
+
   ProfileMe _meProfileFromHive() {
     final status = (Hive.box('authBox').get('status') as int?) ?? 1;
     return ProfileMe(
@@ -232,7 +242,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       gender: _gender(),
       avatarUrl: _avatarUrl(),
       allowMessagesFromNonFriends: _allowMessagesFromNonFriends(),
+      coverGradientColors: _coverGradientColorsFromHive(),
       createdAt: _createdAtFromHive(),
+    );
+  }
+
+  Future<void> _openCoverEditSheet() async {
+    final initial = _coverGradientColorsFromHive();
+    final initialHex = List<String>.from(
+      initial != null && initial.length == 3 ? initial : kDefaultCoverGradientHex,
+    );
+
+    await showProfileCoverEditSheet(
+      context,
+      initialHexColors: initialHex,
+      onSave: (colors) async {
+        setState(() => _savingProfile = true);
+        try {
+          final data = await ApiClient.instance.put(
+            '/users/me',
+            withAuth: true,
+            body: {'coverGradientColors': colors},
+          );
+          if (!mounted) return;
+          final me = ProfileMe.fromApi(data);
+          await ProfileRepository.writeMeToHive(me);
+          setState(() {});
+        } finally {
+          if (mounted) setState(() => _savingProfile = false);
+        }
+      },
     );
   }
 
@@ -374,6 +413,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'allowMessagesFromNonFriends',
           me.allowMessagesFromNonFriends,
         );
+        if (me.coverGradientColors != null && me.coverGradientColors!.length == 3) {
+          await box.put('coverGradientColors', me.coverGradientColors);
+        } else {
+          await box.delete('coverGradientColors');
+        }
         if (mounted) setState(() {});
       } on ApiException catch (e) {
         if (disposed || !mounted) return;
@@ -522,34 +566,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
       builder: (context) {
-        return DraggableScrollableSheet(
-          expand: false,
-          initialChildSize: 0.78,
-          minChildSize: 0.45,
-          maxChildSize: 0.95,
-          builder: (context, scrollController) {
-            return StatefulBuilder(
-              builder: (context, setSheetState) {
-                sheetSetState = setSheetState;
-                return ProfileEditSheetContent(
-                  email: _email() ?? '',
-                  avatarUrl: avatarUrl,
-                  savingProfile: _savingProfile,
-                  lastSaveMessage: lastSaveMessage,
-                  lastSaveOk: lastSaveOk,
-                  usernameController: usernameController,
-                  displayNameController: displayNameController,
-                  bioController: bioController,
-                  birthDate: birthDate,
-                  gender: gender,
-                  allowMessagesFromNonFriends: allowMessagesFromNonFriends,
-                  scrollController: scrollController,
-                  sheetPadding: EdgeInsets.fromLTRB(
-                    16,
-                    8,
-                    16,
-                    16 + MediaQuery.of(context).viewInsets.bottom,
-                  ),
+        final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
+        return Padding(
+          padding: EdgeInsets.only(bottom: keyboardInset),
+          child: DraggableScrollableSheet(
+            expand: false,
+            initialChildSize: 0.78,
+            minChildSize: 0.45,
+            maxChildSize: 1.0,
+            builder: (context, scrollController) {
+              return StatefulBuilder(
+                builder: (context, setSheetState) {
+                  sheetSetState = setSheetState;
+                  return ProfileEditSheetContent(
+                    email: _email() ?? '',
+                    avatarUrl: avatarUrl,
+                    savingProfile: _savingProfile,
+                    lastSaveMessage: lastSaveMessage,
+                    lastSaveOk: lastSaveOk,
+                    usernameController: usernameController,
+                    displayNameController: displayNameController,
+                    bioController: bioController,
+                    birthDate: birthDate,
+                    gender: gender,
+                    allowMessagesFromNonFriends: allowMessagesFromNonFriends,
+                    scrollController: scrollController,
+                    sheetPadding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   onPickAvatar: () async {
                     final messenger = ScaffoldMessenger.of(context);
                     final picker = ImagePicker();
@@ -631,6 +673,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               },
             );
           },
+        ),
         );
       },
     );
@@ -934,9 +977,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   child: ProfileAvatarHeader(
                     headerHeight: 110,
                     avatarUrl: avatarUrl,
+                    headerGradientColors: coverGradientColorsFromHex(
+                      u.coverGradientColors,
+                    ),
                     actionsBar: ProfileActionsBar(
                       onBackPressed: () => Navigator.of(context).pop(),
                       isMe: isMe,
+                      onCoverEditPressed: isMe ? _openCoverEditSheet : null,
                       onEditPressed: isMe ? _openEditSheet : null,
                       onQrPressed: () {
                         final myId =
@@ -950,6 +997,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               displayName: box.get('displayName') as String?,
                               username: box.get('username') as String?,
                               avatarUrl: box.get('avatarUrl') as String?,
+                              coverGradientColors:
+                                  u.coverGradientColors ?? _coverGradientColorsFromHive(),
                               buildProfileScreen: (scannedId) =>
                                   ProfileScreen(userId: scannedId),
                             ),

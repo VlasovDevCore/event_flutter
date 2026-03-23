@@ -96,7 +96,7 @@ class _BirthDateFieldState extends State<_BirthDateField> {
   }
 }
 
-class _StyledTextField extends StatelessWidget {
+class _StyledTextField extends StatefulWidget {
   const _StyledTextField({
     required this.labelText,
     required this.controller,
@@ -116,7 +116,45 @@ class _StyledTextField extends StatelessWidget {
   final Widget? labelTrailing;
 
   @override
+  State<_StyledTextField> createState() => _StyledTextFieldState();
+}
+
+class _StyledTextFieldState extends State<_StyledTextField> {
+  final FocusNode _focusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChange);
+  }
+
+  void _onFocusChange() {
+    if (!_focusNode.hasFocus) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_focusNode.hasFocus) return;
+      final ctx = _focusNode.context;
+      if (ctx == null) return;
+      Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        alignment: 0.2,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChange);
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
+    final scrollPadBottom = keyboardBottom + 24;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -124,31 +162,33 @@ class _StyledTextField extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              labelText,
+              widget.labelText,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.white70,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
             ),
-            if (labelTrailing != null) labelTrailing!,
+            if (widget.labelTrailing != null) widget.labelTrailing!,
           ],
         ),
         const SizedBox(height: 6),
         TextField(
-          enabled: enabled,
-          controller: controller,
-          maxLines: maxLines,
-          maxLength: maxLength,
+          focusNode: _focusNode,
+          enabled: widget.enabled,
+          controller: widget.controller,
+          maxLines: widget.maxLines,
+          maxLength: widget.maxLength,
           // Мы рисуем свой счётчик справа от label, поэтому скрываем стандартный.
           buildCounter: (context, {required currentLength, required isFocused, required maxLength}) {
             return const SizedBox.shrink();
           },
           textAlign: TextAlign.start,
           textAlignVertical:
-              maxLines > 1 ? TextAlignVertical.top : TextAlignVertical.center,
+              widget.maxLines > 1 ? TextAlignVertical.top : TextAlignVertical.center,
+          scrollPadding: EdgeInsets.fromLTRB(16, 24, 16, scrollPadBottom),
           decoration: InputDecoration(
-            hintText: hintText,
+            hintText: widget.hintText,
             filled: true,
             fillColor: _fieldBg,
             hintStyle: const TextStyle(color: Colors.white54),
@@ -456,6 +496,7 @@ class ProfileEditSheetContent extends StatelessWidget {
     return ListView(
       controller: scrollController,
       padding: sheetPadding,
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       children: [
         Center(
           child: Column(

@@ -35,6 +35,7 @@ class ProfileMe {
     required this.gender,
     required this.avatarUrl,
     required this.allowMessagesFromNonFriends,
+    this.coverGradientColors,
     this.createdAt,
   });
 
@@ -60,6 +61,12 @@ class ProfileMe {
       createdAt = DateTime.tryParse(createdRaw);
     }
 
+    List<String>? coverGradientColors;
+    final coverRaw = map['cover_gradient_colors'] ?? map['coverGradientColors'];
+    if (coverRaw is List && coverRaw.length == 3) {
+      coverGradientColors = coverRaw.map((e) => e.toString().trim()).toList();
+    }
+
     return ProfileMe(
       email: (map['email'] as String?)?.trim(),
       username: (map['username'] as String?)?.trim(),
@@ -71,6 +78,7 @@ class ProfileMe {
       gender: (map['gender'] as String?)?.trim(),
       avatarUrl: (avatarUrl as String?)?.trim(),
       allowMessagesFromNonFriends: allowNonFriends is bool ? allowNonFriends : true,
+      coverGradientColors: coverGradientColors,
       createdAt: createdAt,
     );
   }
@@ -84,6 +92,8 @@ class ProfileMe {
   final String? gender;
   final String? avatarUrl;
   final bool allowMessagesFromNonFriends;
+  /// Три hex-цвета градиента обложки (#RRGGBB), с сервера или null.
+  final List<String>? coverGradientColors;
   /// Дата регистрации (из API `created_at`).
   final DateTime? createdAt;
 

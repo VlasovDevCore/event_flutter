@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -16,8 +17,22 @@ class ApiClient {
   // static const String baseUrl = 'http://localhost:4006';
   static const String baseUrl = 'http://192.168.0.223:4006';
 
+  /// Без таймаута запрос к недоступному хосту на телефоне может «висеть» минутами.
+  static const Duration requestTimeout = Duration(seconds: 20);
+
   Uri _uri(String path, [Map<String, String>? query]) {
     return Uri.parse('$baseUrl$path').replace(queryParameters: query);
+  }
+
+  Future<T> _withTimeout<T>(Future<T> future) async {
+    try {
+      return await future.timeout(requestTimeout);
+    } on TimeoutException {
+      throw ApiException(
+        408,
+        'Сервер не отвечает. Проверьте Wi‑Fi, адрес API ($baseUrl) и что бэкенд запущен.',
+      );
+    }
   }
 
   Future<Map<String, dynamic>> post(
@@ -37,10 +52,12 @@ class ApiClient {
       }
     }
 
-    final res = await http.post(
-      _uri(path),
-      headers: headers,
-      body: jsonEncode(body ?? {}),
+    final res = await _withTimeout(
+      http.post(
+        _uri(path),
+        headers: headers,
+        body: jsonEncode(body ?? {}),
+      ),
     );
 
     final data = res.body.isNotEmpty
@@ -74,10 +91,12 @@ class ApiClient {
       }
     }
 
-    final res = await http.put(
-      _uri(path),
-      headers: headers,
-      body: jsonEncode(body ?? {}),
+    final res = await _withTimeout(
+      http.put(
+        _uri(path),
+        headers: headers,
+        body: jsonEncode(body ?? {}),
+      ),
     );
 
     final data = res.body.isNotEmpty
@@ -107,9 +126,11 @@ class ApiClient {
         headers['Authorization'] = 'Bearer $token';
       }
     }
-    final res = await http.get(
-      _uri(path, query),
-      headers: headers,
+    final res = await _withTimeout(
+      http.get(
+        _uri(path, query),
+        headers: headers,
+      ),
     );
     final data = res.body.isNotEmpty ? jsonDecode(res.body) : null;
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -135,9 +156,11 @@ class ApiClient {
       }
     }
 
-    final res = await http.get(
-      _uri(path, query),
-      headers: headers,
+    final res = await _withTimeout(
+      http.get(
+        _uri(path, query),
+        headers: headers,
+      ),
     );
     final data = res.body.isNotEmpty ? jsonDecode(res.body) : [];
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -172,8 +195,8 @@ class ApiClient {
       ),
     );
 
-    final streamed = await req.send();
-    final res = await http.Response.fromStream(streamed);
+    final streamed = await _withTimeout(req.send());
+    final res = await _withTimeout(http.Response.fromStream(streamed));
     final data = (() {
       if (res.body.isEmpty) return <String, dynamic>{};
       try {

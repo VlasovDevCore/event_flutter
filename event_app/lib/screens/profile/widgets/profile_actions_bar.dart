@@ -12,6 +12,7 @@ class ProfileActionsBar extends StatelessWidget {
     this.buttonBorderRadius = 12.0,
     this.splashColor = const Color.fromARGB(157, 0, 0, 0),
     this.highlightColor = const Color.fromARGB(157, 0, 0, 0),
+    this.onCoverEditPressed,
     this.onEditPressed,
     this.onQrPressed,
     this.onLogoutPressed,
@@ -25,6 +26,7 @@ class ProfileActionsBar extends StatelessWidget {
 
   final VoidCallback onBackPressed;
   final bool isMe;
+  final VoidCallback? onCoverEditPressed;
   final VoidCallback? onEditPressed;
   final VoidCallback? onQrPressed;
   final VoidCallback? onLogoutPressed;
@@ -48,6 +50,7 @@ class ProfileActionsBar extends StatelessWidget {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (context) => _ActionMenu(
+        onCoverEditPressed: onCoverEditPressed,
         onEditPressed: onEditPressed,
         onQrPressed: onQrPressed,
         onLogoutPressed: onLogoutPressed,
@@ -104,6 +107,7 @@ class ProfileActionsBar extends StatelessWidget {
 // Компонент меню с действиями
 class _ActionMenu extends StatelessWidget {
   const _ActionMenu({
+    required this.onCoverEditPressed,
     required this.onEditPressed,
     required this.onQrPressed,
     required this.onLogoutPressed,
@@ -119,6 +123,7 @@ class _ActionMenu extends StatelessWidget {
     required this.itemBorderRadius,
   });
 
+  final VoidCallback? onCoverEditPressed;
   final VoidCallback? onEditPressed;
   final VoidCallback? onQrPressed;
   final VoidCallback? onLogoutPressed;
@@ -144,6 +149,22 @@ class _ActionMenu extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           const SizedBox(height: 8),
+
+          if (onCoverEditPressed != null)
+            _MenuItem(
+              icon: Icons.gradient,
+              title: 'Редактировать обложку',
+              onTap: () {
+                Navigator.pop(context);
+                onCoverEditPressed?.call();
+              },
+              iconColor: iconColor,
+              iconSize: iconSize,
+              isDisabled: isSaving,
+              splashColor: splashColor,
+              highlightColor: highlightColor,
+              borderRadius: itemBorderRadius,
+            ),
 
           // Кнопка редактирования (только для своего профиля)
           if (onEditPressed != null)

@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'profile_avatar.dart';
+import 'profile_cover_gradient.dart';
 
 const Color _kBg = Color(0xFF161616);
 const Color _kSurface = Color(0xFF232323);
@@ -17,6 +18,7 @@ class ProfileQrScreen extends StatefulWidget {
     this.displayName,
     this.username,
     this.avatarUrl,
+    this.coverGradientColors,
   });
 
   final String userId;
@@ -24,6 +26,9 @@ class ProfileQrScreen extends StatefulWidget {
   final String? displayName;
   final String? username;
   final String? avatarUrl;
+
+  /// Три цвета градиента обложки (`#RRGGBB`), как в API / Hive.
+  final List<String>? coverGradientColors;
 
   @override
   State<ProfileQrScreen> createState() => _ProfileQrScreenState();
@@ -101,6 +106,10 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
   Widget build(BuildContext context) {
     const qrSize = 260.0;
     final resolvedAvatar = resolveAvatarUrl(widget.avatarUrl);
+    final g = coverGradientColorsFromHex(widget.coverGradientColors);
+    final c0 = g[0];
+    final c1 = g[1];
+    final c2 = g[2];
 
     return Scaffold(
       backgroundColor: _kBg,
@@ -115,9 +124,9 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                   center: Alignment.topLeft,
                   radius: 1.45,
                   colors: [
-                    const Color(0xFFFF6E82).withValues(alpha: 0.72),
-                    const Color(0xFFE64444).withValues(alpha: 0.48),
-                    const Color(0xFFFEBC2F).withValues(alpha: 0.22),
+                    c0.withValues(alpha: 0.72),
+                    c1.withValues(alpha: 0.48),
+                    c2.withValues(alpha: 0.22),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.28, 0.52, 1.0],
@@ -149,9 +158,9 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                   center: Alignment.bottomRight,
                   radius: 1.35,
                   colors: [
-                    const Color(0xFFFEBC2F).withValues(alpha: 0.58),
-                    const Color(0xFFFF6E82).withValues(alpha: 0.38),
-                    const Color(0xFFE64444).withValues(alpha: 0.2),
+                    c2.withValues(alpha: 0.58),
+                    c1.withValues(alpha: 0.38),
+                    c0.withValues(alpha: 0.2),
                     Colors.transparent,
                   ],
                   stops: const [0.0, 0.3, 0.55, 1.0],

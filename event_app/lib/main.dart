@@ -57,6 +57,10 @@ class EventApp extends StatelessWidget {
           foregroundColor: Colors.white,
           elevation: 0,
         ),
+        bottomSheetTheme: const BottomSheetThemeData(
+          dragHandleColor: Color(0xFF4A4A4A),
+          dragHandleSize: Size(45, 4),
+        ),
       ),
       home: isLoggedIn ? const HomeScreen() : const AuthScreen(),
     );
