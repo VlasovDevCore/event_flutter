@@ -2,6 +2,400 @@ import 'package:flutter/material.dart';
 
 import '../profile_avatar.dart';
 
+const Color _fieldBg = Color(0xFF1F1F1F);
+const Color _fieldBorder = Color(0xFF222222);
+
+String? _formatBirthDate(String? birthDate) {
+  if (birthDate == null) return null;
+  final v = birthDate.trim();
+  if (v.isEmpty) return null;
+
+  // Ожидаем ISO: YYYY-MM-DD -> DD/MM/YYYY
+  if (v.length >= 10 && v.contains('-')) {
+    final y = v.substring(0, 4);
+    final m = v.substring(5, 7);
+    final d = v.substring(8, 10);
+    return '$d/$m/$y';
+  }
+
+  return v;
+}
+
+class _BirthDateField extends StatefulWidget {
+  const _BirthDateField({
+    required this.birthDate,
+    required this.onPickBirthDate,
+  });
+
+  final String? birthDate;
+  final Future<void> Function() onPickBirthDate;
+
+  @override
+  State<_BirthDateField> createState() => _BirthDateFieldState();
+}
+
+class _BirthDateFieldState extends State<_BirthDateField> {
+  bool isPressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final formatted = _formatBirthDate(widget.birthDate);
+    final text = formatted ?? 'дд/мм/гггг';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Дата рождения',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+        ),
+        const SizedBox(height: 6),
+        InkWell(
+          onTap: () async => widget.onPickBirthDate(),
+          onHighlightChanged: (value) => setState(() => isPressed = value),
+          borderRadius: BorderRadius.circular(10),
+          child: InputDecorator(
+            isFocused: isPressed,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: _fieldBg,
+              enabledBorder: OutlineInputBorder(
+                borderSide: const BorderSide(color: _fieldBorder),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              focusedBorder: const OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.white, width: 2),
+                borderRadius: BorderRadius.all(Radius.circular(10)),
+              ),
+              border: OutlineInputBorder(
+                borderSide: const BorderSide(color: _fieldBorder),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 14,
+              ),
+            ),
+            child: Text(
+              text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: formatted == null ? Colors.white54 : Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _StyledTextField extends StatelessWidget {
+  const _StyledTextField({
+    required this.labelText,
+    required this.controller,
+    this.hintText,
+    this.enabled = true,
+    this.maxLines = 1,
+    this.maxLength,
+    this.labelTrailing,
+  });
+
+  final String labelText;
+  final TextEditingController controller;
+  final String? hintText;
+  final bool enabled;
+  final int maxLines;
+  final int? maxLength;
+  final Widget? labelTrailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              labelText,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            if (labelTrailing != null) labelTrailing!,
+          ],
+        ),
+        const SizedBox(height: 6),
+        TextField(
+          enabled: enabled,
+          controller: controller,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          // Мы рисуем свой счётчик справа от label, поэтому скрываем стандартный.
+          buildCounter: (context, {required currentLength, required isFocused, required maxLength}) {
+            return const SizedBox.shrink();
+          },
+          textAlign: TextAlign.start,
+          textAlignVertical:
+              maxLines > 1 ? TextAlignVertical.top : TextAlignVertical.center,
+          decoration: InputDecoration(
+            hintText: hintText,
+            filled: true,
+            fillColor: _fieldBg,
+            hintStyle: const TextStyle(color: Colors.white54),
+            enabledBorder: OutlineInputBorder(
+              borderSide: const BorderSide(color: _fieldBorder),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            focusedBorder: const OutlineInputBorder(
+              borderSide: BorderSide(color: Colors.white, width: 2),
+              borderRadius: BorderRadius.all(Radius.circular(10)),
+            ),
+            border: OutlineInputBorder(
+              borderSide: const BorderSide(color: _fieldBorder),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+          ),
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _GenderDropdownField extends StatefulWidget {
+  const _GenderDropdownField({
+    required this.gender,
+    required this.onGenderChanged,
+    required this.enabled,
+  });
+
+  final String? gender;
+  final ValueChanged<String?> onGenderChanged;
+  final bool enabled;
+
+  @override
+  State<_GenderDropdownField> createState() => _GenderDropdownFieldState();
+}
+
+class _GenderDropdownFieldState extends State<_GenderDropdownField> {
+  OverlayEntry? _entry;
+  final LayerLink _layerLink = LayerLink();
+
+  bool _isOpen = false;
+
+  double _fieldWidth = 0;
+  double _fieldHeight = 0;
+
+  @override
+  void dispose() {
+    _entry?.remove();
+    _entry = null;
+    super.dispose();
+  }
+
+  String? _displayGender(String? v) {
+    if (v == null || v.isEmpty) return null;
+    switch (v) {
+      case 'male':
+        return 'Мужской';
+      case 'female':
+        return 'Женский';
+      case 'other':
+        return 'Другое';
+      default:
+        return v;
+    }
+  }
+
+  Future<void> _openMenu() async {
+    if (!widget.enabled) return;
+    if (_entry != null) return;
+
+    final overlay = Overlay.of(context);
+    if (overlay == null) return;
+
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox == null) return;
+
+    _fieldWidth = renderBox.size.width;
+    _fieldHeight = renderBox.size.height;
+    const radius = 12.0;
+
+    _entry = OverlayEntry(
+      builder: (context) {
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  _entry?.remove();
+                  _entry = null;
+                  if (mounted) setState(() => _isOpen = false);
+                },
+              ),
+            ),
+            CompositedTransformFollower(
+              link: _layerLink,
+              // Ниже поля на высоту + небольшой отступ.
+              offset: Offset(0, _fieldHeight + 6),
+              showWhenUnlinked: false,
+              child: Material(
+                color: Colors.transparent,
+                child: SizedBox(
+                  width: _fieldWidth,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(radius),
+                    child: Container(
+                      constraints: const BoxConstraints(maxHeight: 180),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF252525),
+                        borderRadius: BorderRadius.circular(radius),
+                        border: Border.all(color: const Color(0xFF222222)),
+                      ),
+                      child: ListView(
+                        padding: EdgeInsets.zero,
+                        shrinkWrap: true,
+                        children: [
+                          _MenuItem(
+                            text: 'Мужской',
+                            onTap: () {
+                              _entry?.remove();
+                              _entry = null;
+                              widget.onGenderChanged('male');
+                              if (mounted) setState(() => _isOpen = false);
+                            },
+                          ),
+                          _MenuItem(
+                            text: 'Женский',
+                            onTap: () {
+                              _entry?.remove();
+                              _entry = null;
+                              widget.onGenderChanged('female');
+                              if (mounted) setState(() => _isOpen = false);
+                            },
+                          ),
+                          _MenuItem(
+                            text: 'Другое',
+                            onTap: () {
+                              _entry?.remove();
+                              _entry = null;
+                              widget.onGenderChanged('other');
+                              if (mounted) setState(() => _isOpen = false);
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    overlay.insert(_entry!);
+    if (mounted) setState(() => _isOpen = true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final text = _displayGender(widget.gender) ?? 'Не выбрано';
+    final isHint = widget.gender == null || widget.gender!.isEmpty;
+    const arrowColor = Colors.white54;
+
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: SizedBox(
+        width: double.infinity,
+        child: InkWell(
+          onTap: _openMenu,
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+            decoration: BoxDecoration(
+              color: _fieldBg,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _fieldBorder),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      color: isHint ? Colors.white54 : Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                    AnimatedRotation(
+                      duration: const Duration(milliseconds: 180),
+                      curve: Curves.easeInOut,
+                      turns: _isOpen ? 0.5 : 0.0, // 180 degrees: вниз <-> вверх
+                      child: const Icon(
+                        Icons.keyboard_arrow_down,
+                        color: arrowColor,
+                      ),
+                    ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.text,
+    required this.onTap,
+  });
+
+  final String text;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class ProfileEditSheetContent extends StatelessWidget {
   const ProfileEditSheetContent({
     super.key,
@@ -49,6 +443,8 @@ class ProfileEditSheetContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const usernameMaxLen = 20;
+    const bioMaxLen = 280;
     const placeholderBg = Color(0xFF252525);
     final fullAvatarUrl = resolveAvatarUrl(avatarUrl);
     final statusColor = savingProfile
@@ -61,135 +457,229 @@ class ProfileEditSheetContent extends StatelessWidget {
       controller: scrollController,
       padding: sheetPadding,
       children: [
+        Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Stack(
+                alignment: Alignment.bottomRight,
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(18),
+                    child: InkWell(
+                      onTap: savingProfile ? null : onPickAvatar,
+                      borderRadius: BorderRadius.circular(18),
+                      child: SizedBox(
+                        width: 96,
+                        height: 96,
+                        child: fullAvatarUrl == null
+                            ? Container(
+                                color: placeholderBg,
+                                alignment: Alignment.center,
+                                child: const Icon(Icons.person, color: Colors.white),
+                              )
+                            : Image.network(
+                                fullAvatarUrl,
+                                fit: BoxFit.cover,
+                              ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: -6,
+                    top: -6,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: savingProfile ? null : () { onPickAvatar(); },
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(
+                          Icons.photo,
+                          size: 18,
+                          color: Colors.black,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Редактирование профиля',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                savingProfile
+                    ? 'Сохраняю...'
+                    : (lastSaveMessage ?? 'Изменения сохранятся при закрытии'),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: statusColor),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _StyledTextField(
+          labelText: 'Никнейм',
+          controller: usernameController,
+          hintText: 'ivan_123',
+          maxLength: usernameMaxLen,
+          labelTrailing: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: usernameController,
+            builder: (context, value, _) {
+              final len = value.text.trim().length;
+              return Text(
+                '$len/$usernameMaxLen',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
+        _StyledTextField(
+          labelText: 'Имя',
+          controller: displayNameController,
+          hintText: 'Как Вас зовут?',
+        ),
+        const SizedBox(height: 12),
+        _StyledTextField(
+          labelText: 'О себе',
+          controller: bioController,
+          maxLines: 4,
+          hintText: 'Расскажите немного о себе',
+          maxLength: bioMaxLen,
+          labelTrailing: ValueListenableBuilder<TextEditingValue>(
+            valueListenable: bioController,
+            builder: (context, value, _) {
+              final len = value.text.length;
+              return Text(
+                '$len/$bioMaxLen',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.white70,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 12),
         Row(
           children: [
-            CircleAvatar(
-              radius: 28,
-              backgroundColor: placeholderBg,
-              backgroundImage: fullAvatarUrl == null ? null : NetworkImage(fullAvatarUrl),
-              child: fullAvatarUrl != null ? null : const Icon(Icons.person, color: Colors.white),
+            Expanded(
+              child: _BirthDateField(
+                birthDate: birthDate,
+                onPickBirthDate: onPickBirthDate,
+              ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Редактирование профиля',
-                    style: Theme.of(context).textTheme.titleMedium,
+                    'Пол',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.white70,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    savingProfile
-                        ? 'Сохраняю...'
-                        : (lastSaveMessage ?? 'Изменения сохранятся при закрытии'),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(color: statusColor),
+                  const SizedBox(height: 6),
+                  _GenderDropdownField(
+                    gender: gender,
+                    enabled: !savingProfile,
+                    onGenderChanged: onGenderChanged,
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        Text('Аватар', style: Theme.of(context).textTheme.titleSmall),
-        const SizedBox(height: 8),
-        SizedBox(
-          width: double.infinity,
-          child: FilledButton.tonalIcon(
-            onPressed: savingProfile ? null : () { onPickAvatar(); },
-            icon: const Icon(Icons.photo),
-            label: const Text('Загрузить фото'),
-          ),
-        ),
         const SizedBox(height: 12),
-        const SizedBox(height: 16),
-        TextField(
-          controller: usernameController,
-          decoration: const InputDecoration(
-            labelText: 'Никнейм (username)',
-            hintText: 'ivan_123',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: displayNameController,
-          decoration: const InputDecoration(
-            labelText: 'Имя',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          controller: bioController,
-          decoration: const InputDecoration(
-            labelText: 'О себе',
-            border: OutlineInputBorder(),
-          ),
-          maxLines: 4,
-        ),
-        const SizedBox(height: 12),
-        Row(
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: InkWell(
-                onTap: () { onPickBirthDate(); },
-                borderRadius: BorderRadius.circular(12),
-                child: InputDecorator(
-                  decoration: const InputDecoration(
-                    labelText: 'Дата рождения',
-                    border: OutlineInputBorder(),
+            Text(
+              'Email',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.white70,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
                   ),
-                  child: Text(birthDate ?? 'Не указано'),
-                ),
-              ),
             ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: DropdownButtonFormField<String>(
-                value: (gender == null || gender!.isEmpty) ? null : gender,
-                items: const [
-                  DropdownMenuItem(value: 'male', child: Text('Мужской')),
-                  DropdownMenuItem(value: 'female', child: Text('Женский')),
-                  DropdownMenuItem(value: 'other', child: Text('Другое')),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Пол',
-                  border: OutlineInputBorder(),
+            const SizedBox(height: 6),
+            TextField(
+              enabled: false,
+              decoration: InputDecoration(
+                hintText: email.isEmpty ? 'email@example.com' : email,
+                filled: true,
+                fillColor: _fieldBg,
+                hintStyle: const TextStyle(color: Colors.white54),
+                enabledBorder: OutlineInputBorder(
+                  borderSide: const BorderSide(color: _fieldBorder),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                onChanged: onGenderChanged,
+                border: OutlineInputBorder(
+                  borderSide: const BorderSide(color: _fieldBorder),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 14,
+                ),
               ),
+              style: const TextStyle(color: Colors.white54),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        TextField(
-          enabled: false,
-          decoration: InputDecoration(
-            labelText: 'Email',
-            hintText: email.isEmpty ? '—' : email,
-            border: const OutlineInputBorder(),
-            hintStyle: const TextStyle(color: Colors.grey),
-          ),
         ),
         const SizedBox(height: 12),
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: const Text('Разрешать сообщения не друзьям'),
+          title: const Text(
+            'Разрешать сообщения не друзьям',
+            style: TextStyle(color: Colors.white),
+          ),
           value: allowMessagesFromNonFriends,
+          activeColor: Colors.white,
+          inactiveThumbColor: Colors.white54,
+          inactiveTrackColor: const Color(0xFF222222),
           onChanged: savingProfile ? null : onAllowMessagesFromNonFriendsChanged,
         ),
         const SizedBox(height: 16),
         Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onClose,
-                child: const Text('Закрыть'),
+            FilledButton(
+              onPressed: onClose,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                fixedSize: const Size(25, 35),
+                padding: EdgeInsets.zero,
               ),
+              child: const Icon(Icons.close, size: 24),
             ),
           ],
         ),
+        const SizedBox(height: 16),
       ],
     );
   }

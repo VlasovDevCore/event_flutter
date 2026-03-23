@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -13,7 +14,6 @@ import 'profile_qr_screen.dart';
 import 'profile_repository.dart';
 import 'profile_social_models.dart';
 import 'widgets/achievement_section.dart';
-import 'widgets/avatar_crop_dialog.dart';
 import 'widgets/birth_date_numeric_sheet.dart';
 import 'widgets/profile_avatar_header.dart';
 import 'widgets/profile_edit_sheet_content.dart';
@@ -236,19 +236,58 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Future<void> _openEditSheet() async {
+  Future<void> _openEditSheet({
+    String? usernameDraft,
+    String? displayNameDraft,
+    String? bioDraft,
+    String? birthDateDraft,
+    String? genderDraft,
+    String? avatarUrlDraft,
+    bool? allowMessagesFromNonFriendsDraft,
+  }) async {
     final box = Hive.box('authBox');
 
-    final usernameController = TextEditingController(text: _username() ?? '');
-    final displayNameController = TextEditingController(
-      text: _displayName() ?? '',
-    );
-    final bioController = TextEditingController(text: _bio() ?? '');
+    Future<Uint8List?> autoCropAvatarSquare(Uint8List bytes) async {
+      final decodedCompleter = Completer<ui.Image>();
+      ui.decodeImageFromList(bytes, (img) => decodedCompleter.complete(img));
+      final img = await decodedCompleter.future;
 
-    String? birthDate = _birthDate();
-    String? gender = _gender();
-    String? avatarUrl = _avatarUrl();
-    bool allowMessagesFromNonFriends = _allowMessagesFromNonFriends();
+      final minSide = (img.width < img.height ? img.width : img.height).toDouble();
+      final srcLeft = (img.width.toDouble() - minSide) / 2.0;
+      final srcTop = (img.height.toDouble() - minSide) / 2.0;
+
+      const outputPx = 512;
+      final src = ui.Rect.fromLTWH(srcLeft, srcTop, minSide, minSide);
+      final dst = ui.Rect.fromLTWH(0, 0, outputPx.toDouble(), outputPx.toDouble());
+
+      final recorder = ui.PictureRecorder();
+      final canvas = ui.Canvas(recorder);
+      final paint = ui.Paint()..isAntiAlias = true;
+
+      canvas.save();
+      // Просто квадратный crop по центру. Закругления будут только на UI.
+      canvas.drawImageRect(img, src, dst, paint);
+      canvas.restore();
+
+      final picture = recorder.endRecording();
+      final croppedImage = await picture.toImage(outputPx, outputPx);
+      final data = await croppedImage.toByteData(format: ui.ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    }
+
+    final usernameController = TextEditingController(
+      text: usernameDraft ?? _username() ?? '',
+    );
+    final displayNameController = TextEditingController(
+      text: displayNameDraft ?? _displayName() ?? '',
+    );
+    final bioController = TextEditingController(text: bioDraft ?? _bio() ?? '');
+
+    String? birthDate = birthDateDraft ?? _birthDate();
+    String? gender = genderDraft ?? _gender();
+    String? avatarUrl = avatarUrlDraft ?? _avatarUrl();
+    bool allowMessagesFromNonFriends =
+        allowMessagesFromNonFriendsDraft ?? _allowMessagesFromNonFriends();
 
     bool disposed = false;
     void Function(void Function())? sheetSetState;
@@ -265,14 +304,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
         lastSaveMessage = 'Никнейм не может быть пустым';
         return false;
       }
-      if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(username)) {
+      // Разрешаем: латиница, цифры, '.' и '_'.
+      // Русские буквы и прочие символы запрещены.
+      if (!RegExp(r'^[a-zA-Z0-9._]+$').hasMatch(username)) {
         lastSaveOk = false;
-        lastSaveMessage = 'Только латиница, цифры и _';
+        lastSaveMessage = 'Только латиница, цифры и символы . или _';
         return false;
       }
-      if (username.length < 3 || username.length > 24) {
+      if (username.length < 3 || username.length > 20) {
         lastSaveOk = false;
-        lastSaveMessage = 'Никнейм: 3–24 символа';
+        lastSaveMessage = 'Никнейм: 3–20 символов';
         return false;
       }
       if (displayName.isNotEmpty && displayName.length > 40) {
@@ -280,15 +321,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
         lastSaveMessage = 'Имя: не больше 40 символов';
         return false;
       }
-      if (bio.length > 500) {
+      if (bio.length > 280) {
         lastSaveOk = false;
-        lastSaveMessage = 'О себе: не больше 500 символов';
+        lastSaveMessage = 'О себе: не больше 280 символов';
         return false;
       }
       lastSaveOk = true;
       lastSaveMessage = null;
       return true;
     }
+
+    // Запоминаем исходные значения, чтобы понять — были ли изменения при
+    // закрытии шторки свайпом (sheetResult == null).
+    final String originalUsername = usernameController.text.trim();
+    final String originalDisplayName = displayNameController.text.trim();
+    final String originalBio = bioController.text.trim();
+    final String? originalBirthDate = birthDate;
+    final String? originalGender = gender;
+    final bool originalAllowMessagesFromNonFriends =
+        allowMessagesFromNonFriends;
 
     Future<void> saveDraftToServer() async {
       if (disposed || !mounted) return;
@@ -326,8 +377,105 @@ class _ProfileScreenState extends State<ProfileScreen> {
         if (mounted) setState(() {});
       } on ApiException catch (e) {
         if (disposed || !mounted) return;
-        final msg = e.statusCode == 409 ? 'Логин занят' : e.message;
-        messenger.showSnackBar(SnackBar(content: Text(msg)));
+        if (e.statusCode == 409) {
+          final usernameValue = usernameController.text.trim();
+          final displayNameValue = displayNameController.text.trim();
+          final bioValue = bioController.text.trim();
+
+          await showModalBottomSheet<void>(
+            context: context,
+            isScrollControlled: true,
+            useSafeArea: true,
+            backgroundColor: const Color(0xFF161616),
+            showDragHandle: false,
+            shape: const RoundedRectangleBorder(
+              borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+            ),
+            builder: (sheetContext) {
+              final theme = Theme.of(sheetContext);
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  18,
+                  16,
+                  16 + MediaQuery.of(sheetContext).viewInsets.bottom,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Не удалось сохранить',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Логин занят',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () async {
+                          Navigator.of(sheetContext).pop();
+                          if (!mounted) return;
+                          await _openEditSheet(
+                            usernameDraft: usernameValue,
+                            displayNameDraft: displayNameValue,
+                            bioDraft: bioValue,
+                            birthDateDraft: birthDate,
+                            genderDraft: gender,
+                            avatarUrlDraft: avatarUrl,
+                            allowMessagesFromNonFriendsDraft:
+                                allowMessagesFromNonFriends,
+                          );
+                        },
+                        child: const Text('Вернуться обратно'),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.white,
+                          side: const BorderSide(color: Color(0xFF222222)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        onPressed: () => Navigator.of(sheetContext).pop(),
+                        child: const Text('Закрыть'),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        } else {
+          messenger.showSnackBar(
+            SnackBar(content: Text(e.message)),
+          );
+        }
       } catch (e) {
         if (disposed || !mounted) return;
         messenger.showSnackBar(SnackBar(content: Text('Ошибка: $e')));
@@ -369,6 +517,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return DraggableScrollableSheet(
           expand: false,
@@ -411,18 +563,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     try {
                       setState(() => _savingProfile = true);
                       final rawBytes = await picked.readAsBytes();
+                      final croppedBytes = await autoCropAvatarSquare(rawBytes);
+                      if (croppedBytes == null) return;
                       if (!context.mounted) return;
-                      final cropped = await showDialog<Uint8List?>(
-                        context: context,
-                        builder: (dialogContext) =>
-                            AvatarCropDialog(bytes: rawBytes),
-                      );
-                      if (cropped == null) return;
 
                       final data = await ApiClient.instance.uploadImage(
                         '/users/me/avatar',
                         withAuth: true,
-                        bytes: cropped,
+                        bytes: croppedBytes,
                         filename: 'avatar.png',
                       );
                       final me = ProfileMe.fromApi(data);
@@ -489,21 +637,34 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     detachEditSheetListeners();
 
-    final willSave = sheetResult == true || validateDraft();
+    final draftChanged = usernameController.text.trim() != originalUsername ||
+        displayNameController.text.trim() != originalDisplayName ||
+        bioController.text.trim() != originalBio ||
+        birthDate != originalBirthDate ||
+        gender != originalGender ||
+        allowMessagesFromNonFriends != originalAllowMessagesFromNonFriends;
+
+    // Сохраняем:
+    // - при явном закрытии кнопкой (sheetResult == true)
+    // - при свайпе вниз (sheetResult == null) только если были реальные изменения
+    //   (иначе профиль не должен "дергаться").
+    bool willSave = false;
+    if (sheetResult == true) {
+      willSave = true;
+    } else if (sheetResult == null && draftChanged) {
+      willSave = validateDraft();
+    }
     try {
       if (willSave) {
-        if (mounted) {
-          setState(() => _reloadingMeProfileAfterEdit = true);
-        }
         await saveDraftToServer();
-      } else if (mounted) {
+      } else if (mounted && sheetResult == false) {
         final msg = lastSaveMessage ?? 'Проверьте поля профиля';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(msg)),
         );
       }
     } finally {
-      if (mounted) {
+      if (mounted && _reloadingMeProfileAfterEdit) {
         setState(() => _reloadingMeProfileAfterEdit = false);
       }
       // [TextField] отцепляется от контроллера не мгновенно; dispose сразу после pop
