@@ -18,6 +18,9 @@ class EventMarkerWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final gradientStart = Color.lerp(color, Colors.white, 0.22) ?? color;
+    final gradientEnd = Color.lerp(color, Colors.black, 0.22) ?? color;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -25,20 +28,12 @@ class EventMarkerWidget extends StatelessWidget {
           width: size,
           height: size,
           decoration: BoxDecoration(
-            color: color,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: const Color(0xFF23262C),
-              width: 2,
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [gradientStart, gradientEnd],
             ),
-            boxShadow: [
-              BoxShadow(
-                color: color.withOpacity(0.45),
-                blurRadius: 14,
-                spreadRadius: 2,
-                offset: const Offset(0, 5),
-              ),
-            ],
+            borderRadius: BorderRadius.circular(12),
           ),
           alignment: Alignment.center,
           child: Icon(

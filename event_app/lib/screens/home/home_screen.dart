@@ -379,7 +379,11 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       isScrollControlled: true,
       showDragHandle: false,
-      useSafeArea: false,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
       builder: (context) {
         return DraggableScrollableSheet(
           expand: false,
@@ -387,13 +391,12 @@ class _HomeScreenState extends State<HomeScreen> {
           minChildSize: 0.45,
           maxChildSize: 1.0,
           builder: (context, scrollController) {
-            final topInset = MediaQuery.viewPaddingOf(context).top;
             return VisibleEventsSheetContent(
               visibleEvents: _visibleEvents,
               scrollController: scrollController,
               sheetPadding: EdgeInsets.fromLTRB(
                 0,
-                8 + topInset,
+                8,
                 16,
                 16 + MediaQuery.viewInsetsOf(context).bottom,
               ),
@@ -590,6 +593,7 @@ class _HomeScreenState extends State<HomeScreen> {
         point: LatLng(event.lat, event.lon),
         width: 60,
         height: 60,
+        rotate: true,
         child: Tooltip(
           message: event.title,
           child: GestureDetector(
@@ -650,13 +654,14 @@ class _HomeScreenState extends State<HomeScreen> {
               MarkerClusterLayerWidget(
                 options: MarkerClusterLayerOptions(
                   markers: eventMarkers,
+                  rotate: true,
                   maxClusterRadius: 60,
                   size: const Size(46, 46),
                   showPolygon: false,
                   builder: (context, markers) {
                     return Container(
                       decoration: BoxDecoration(
-                        color: Colors.deepPurple,
+                        color: Colors.white,
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
@@ -670,7 +675,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       child: Text(
                         markers.length.toString(),
                         style: const TextStyle(
-                          color: Colors.white,
+                          color: Colors.black,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

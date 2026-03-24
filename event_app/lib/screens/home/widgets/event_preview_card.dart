@@ -43,10 +43,10 @@ class EventPreviewCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
         decoration: BoxDecoration(
-          color: const Color(0xFF1C1F26).withOpacity(0.96),
+          color: const Color(0xFF161616).withOpacity(0.96),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: const Color(0xFF23262C),
+            color: const Color(0xFF161616),
             width: 1.5,
           ),
           boxShadow: [
@@ -61,45 +61,45 @@ class EventPreviewCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: markerColor.withOpacity(0.15), // фон из цвета события
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: Text(
-                  iconLabel?.toUpperCase() ?? 'СОБЫТИЕ',
-                  style: TextStyle(
-                    color: markerColor, // цвет текста из цвета события
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.6,
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: markerColor.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(
+                    iconLabel?.toUpperCase() ?? 'СОБЫТИЕ',
+                    style: TextStyle(
+                      color: markerColor,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.6,
+                    ),
                   ),
                 ),
-              ),
-              const Spacer(),
-              if (remainingLabel != null)
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.access_time_rounded,
-                      size: 14,
-                      color: Color(0xFFB5BBC7),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      remainingLabel!,
-                      style: const TextStyle(
+                const Spacer(),
+                if (remainingLabel != null)
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.access_time_rounded,
+                        size: 14,
                         color: Color(0xFFB5BBC7),
-                        fontSize: 11,
                       ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
+                      const SizedBox(width: 4),
+                      Text(
+                        remainingLabel!,
+                        style: const TextStyle(
+                          color: Color(0xFFB5BBC7),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
             const SizedBox(height: 10),
             Text(
               event.title,
@@ -124,37 +124,49 @@ class EventPreviewCard extends StatelessWidget {
               ),
             ],
             const SizedBox(height: 8),
-              EventPreviewParticipantsRow(
-                participants: participants,
-                totalGoing: totalGoing,
-                previewLoading: previewLoading,
-              ),
+            EventPreviewParticipantsRow(
+              participants: participants,
+              totalGoing: totalGoing,
+              previewLoading: previewLoading,
+            ),
             const SizedBox(height: 14),
             Row(
               children: [
                 Expanded(
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor:
-                          isGoing ? const Color(0xFFFF8A8A) : const Color(0xFF36D3F0),
-                      foregroundColor: const Color(0xFF021018),
+                      backgroundColor: isGoing 
+                          ? const Color(0xFF2C2C2C)  // Не приду - серый
+                          : Colors.white,            // Я приду - белый
+                      foregroundColor: isGoing 
+                          ? Colors.white             // Не приду - белый текст
+                          : Colors.black, // Я приду - синий текст
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(999),
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      minimumSize: const Size(0, 48),
                     ),
                     onPressed: () => onRsvpToggle(isGoing ? -1 : 1),
                     child: Text(isGoing ? 'Не приду' : 'Я приду'),
                   ),
                 ),
-                const SizedBox(width: 8),
-                IconButton(
-                  style: IconButton.styleFrom(
-                    backgroundColor: const Color(0xFF151922),
-                    foregroundColor: const Color(0xFFDFE3EC),
+                const SizedBox(width: 12),
+                SizedBox(
+                  height: 48,
+                  child: FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: const Color(0xFF2C2C2C),
+                      foregroundColor: const Color(0xFFDFE3EC),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      minimumSize: const Size(48, 48),
+                    ),
+                    onPressed: onOpenDetails,
+                    child: const Icon(Icons.open_in_full_rounded, size: 20),
                   ),
-                  icon: const Icon(Icons.open_in_full_rounded),
-                  onPressed: onOpenDetails,
                 ),
               ],
             ),
@@ -164,4 +176,3 @@ class EventPreviewCard extends StatelessWidget {
     );
   }
 }
-

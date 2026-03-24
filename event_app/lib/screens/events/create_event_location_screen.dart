@@ -30,52 +30,117 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Выберите место'),
-      ),
-      body: FlutterMap(
-        mapController: _controller,
-        options: MapOptions(
-          initialCenter: widget.initialCenter,
-          initialZoom: 13,
-          backgroundColor: Colors.transparent,
-          onPositionChanged: (position, hasGesture) {
-            if (!hasGesture) return;
-            final center = position.center;
-            _selected = center;
-          },
-        ),
+      backgroundColor: const Color(0xFF161616),
+      body: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-            subdomains: const ['a', 'b', 'c', 'd'],
-            retinaMode: true,
-            userAgentPackageName: 'com.example.event_app',
-            tileProvider: CancellableNetworkTileProvider(),
+          FlutterMap(
+            mapController: _controller,
+            options: MapOptions(
+              initialCenter: widget.initialCenter,
+              initialZoom: 13,
+              backgroundColor: Colors.transparent,
+              onPositionChanged: (position, hasGesture) {
+                if (!hasGesture) return;
+                final center = position.center;
+                _selected = center;
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
+                retinaMode: true,
+                userAgentPackageName: 'com.example.event_app',
+                tileProvider: CancellableNetworkTileProvider(),
+              ),
+              Center(
+                child: IgnorePointer(
+                  child: const EventMarkerWidget(
+                    color: Colors.blue,
+                    icon: Icons.flutter_dash,
+                    size: 50,
+                    iconSize: 24,
+                  ),
+                ),
+              ),
+            ],
           ),
-          Center(
-            child: IgnorePointer(
-              child: const EventMarkerWidget(
-                color: Colors.blue,
-                icon: Icons.flutter_dash,
-                size: 50,
-                iconSize: 24,
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 16, 8),
+              child: Row(
+                children: [
+                  Tooltip(
+                    message: MaterialLocalizations.of(context).backButtonTooltip,
+                    child: Container(
+                      width: 37,
+                      height: 37,
+                      decoration: BoxDecoration(
+                        color: const Color.fromARGB(157, 0, 0, 0),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap: () => Navigator.of(context).maybePop(),
+                          splashColor: const Color.fromARGB(157, 0, 0, 0),
+                          highlightColor: const Color.fromARGB(157, 0, 0, 0),
+                          child: const Center(
+                            child: Icon(
+                              Icons.arrow_back,
+                              color: Colors.white,
+                              size: 18,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Выберите место',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w600,
+                        fontSize: 18,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 16,
+            child: SafeArea(
+              top: false,
+              child: SizedBox(
+                height: 48,
+                child: FilledButton(
+                  onPressed: _selected == null ? null : () => Navigator.of(context).pop(_selected),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    textStyle: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: const Text('Далее'),
+                ),
               ),
             ),
           ),
         ],
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: SizedBox(
-            height: 48,
-            child: FilledButton(
-              onPressed: _selected == null ? null : () => Navigator.of(context).pop(_selected),
-              child: const Text('Далее'),
-            ),
-          ),
-        ),
       ),
     );
   }
