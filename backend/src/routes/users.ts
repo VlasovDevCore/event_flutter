@@ -442,6 +442,8 @@ router.get('/search', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+
+
 // Публичная статистика пользователя (для просмотра профиля в деталях события)
 // ВАЖНО: должен быть до /:id, иначе перехватится как id=".../stats".
 router.get('/:id/stats', async (req, res) => {

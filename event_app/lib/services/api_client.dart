@@ -40,9 +40,7 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool withAuth = false,
   }) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
 
     if (withAuth) {
       final authBox = Hive.box('authBox');
@@ -53,11 +51,7 @@ class ApiClient {
     }
 
     final res = await _withTimeout(
-      http.post(
-        _uri(path),
-        headers: headers,
-        body: jsonEncode(body ?? {}),
-      ),
+      http.post(_uri(path), headers: headers, body: jsonEncode(body ?? {})),
     );
 
     final data = res.body.isNotEmpty
@@ -79,9 +73,7 @@ class ApiClient {
     Map<String, dynamic>? body,
     bool withAuth = false,
   }) async {
-    final headers = <String, String>{
-      'Content-Type': 'application/json',
-    };
+    final headers = <String, String>{'Content-Type': 'application/json'};
 
     if (withAuth) {
       final authBox = Hive.box('authBox');
@@ -92,11 +84,7 @@ class ApiClient {
     }
 
     final res = await _withTimeout(
-      http.put(
-        _uri(path),
-        headers: headers,
-        body: jsonEncode(body ?? {}),
-      ),
+      http.put(_uri(path), headers: headers, body: jsonEncode(body ?? {})),
     );
 
     final data = res.body.isNotEmpty
@@ -127,10 +115,7 @@ class ApiClient {
       }
     }
     final res = await _withTimeout(
-      http.get(
-        _uri(path, query),
-        headers: headers,
-      ),
+      http.get(_uri(path, query), headers: headers),
     );
     final data = res.body.isNotEmpty ? jsonDecode(res.body) : null;
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -157,10 +142,7 @@ class ApiClient {
     }
 
     final res = await _withTimeout(
-      http.get(
-        _uri(path, query),
-        headers: headers,
-      ),
+      http.get(_uri(path, query), headers: headers),
     );
     final data = res.body.isNotEmpty ? jsonDecode(res.body) : [];
     if (res.statusCode >= 200 && res.statusCode < 300) {
@@ -188,11 +170,7 @@ class ApiClient {
     }
 
     req.files.add(
-      http.MultipartFile.fromBytes(
-        fieldName,
-        bytes,
-        filename: filename,
-      ),
+      http.MultipartFile.fromBytes(fieldName, bytes, filename: filename),
     );
 
     final streamed = await _withTimeout(req.send());
@@ -227,4 +205,3 @@ class ApiException implements Exception {
   @override
   String toString() => 'ApiException($statusCode, $message)';
 }
-

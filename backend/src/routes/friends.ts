@@ -182,8 +182,16 @@ router.get('/requests', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await client.query(
       `
-      SELECT fr.id, fr.from_user_id, fr.to_user_id, fr.status, fr.created_at,
-             u.email AS from_email
+      SELECT 
+        fr.id, 
+        fr.from_user_id, 
+        fr.to_user_id, 
+        fr.status, 
+        fr.created_at,
+        u.email AS from_email,
+        u.username,
+        u.display_name,
+        u.avatar_url
       FROM friend_requests fr
       JOIN users u ON u.id = fr.from_user_id
       WHERE fr.to_user_id = $1 AND fr.status = 'pending'
@@ -304,6 +312,7 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
         u.email,
         COALESCE(u.username, '') AS username,
         COALESCE(u.display_name, '') AS display_name,
+        u.avatar_url,
         GREATEST(fr1.created_at, fr2.created_at) AS friends_since
       FROM users u
       JOIN friend_requests fr1
@@ -318,6 +327,127 @@ router.get('/', authMiddleware, async (req: AuthRequest, res) => {
     return res.json(result.rows);
   } catch (err) {
     // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Список пользователей для поиска друзей
+router.get('/users', authMiddleware, async (req: AuthRequest, res) => {
+  const currentUserId = req.user?.id;
+  if (!currentUserId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const { search = '' } = req.query;
+  const searchTerm = (search as string).trim();
+
+  const client = await pool.connect();
+  try {
+    let query = `
+      SELECT 
+        id,
+        email,
+        username,
+        display_name,
+        avatar_url,
+        created_at
+      FROM users
+      WHERE id != $1
+    `;
+    
+    const params: unknown[] = [currentUserId];
+    
+    // Если есть поиск — ищем по всем пользователям
+    if (searchTerm) {
+      query += `
+        AND (
+          email ILIKE $2 OR 
+          username ILIKE $2 OR 
+          display_name ILIKE $2
+        )
+        ORDER BY 
+          CASE 
+            WHEN username ILIKE $2 THEN 1
+            WHEN display_name ILIKE $2 THEN 2
+            ELSE 3
+          END,
+          display_name NULLS LAST, 
+          username NULLS LAST
+      `;
+      params.push(`%${searchTerm}%`);
+    } else {
+      // Если нет поиска — рандомные 20 пользователей
+      query += ` ORDER BY RANDOM() LIMIT 20`;
+    }
+    
+    const result = await client.query(query, params);
+    return res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/requests/sent', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      `
+      SELECT 
+        fr.id, 
+        fr.from_user_id, 
+        fr.to_user_id, 
+        fr.status, 
+        fr.created_at,
+        u.email AS to_email,
+        u.username,
+        u.display_name,
+        u.avatar_url
+      FROM friend_requests fr
+      JOIN users u ON u.id = fr.to_user_id
+      WHERE fr.from_user_id = $1 AND fr.status = 'pending'
+      ORDER BY fr.created_at DESC
+      `,
+      [userId],
+    );
+    return res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/requests/:toUserId', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  const { toUserId } = req.params;
+  
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!toUserId) return res.status(400).json({ error: 'Укажите toUserId' });
+
+  const client = await pool.connect();
+  try {
+    // Удаляем только если заявка от текущего пользователя и статус pending
+    const result = await client.query(
+      `DELETE FROM friend_requests 
+       WHERE from_user_id = $1 AND to_user_id = $2 AND status = 'pending'
+       RETURNING id`,
+      [userId, toUserId],
+    );
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'Заявка не найдена' });
+    }
+    
+    return res.json({ ok: true });
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal error' });
   } finally {

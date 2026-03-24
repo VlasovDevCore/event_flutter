@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../services/api_client.dart';
 import '../profile/profile_screen.dart';
 import 'add_friend_screen.dart';
+import 'widgets/friends_tab.dart';
+import 'widgets/requests_tab.dart';
 
 /// Экран «Мои друзья»: входящие заявки и кнопка «Добавить в друзья».
 class FriendsScreen extends StatefulWidget {
@@ -12,10 +14,12 @@ class FriendsScreen extends StatefulWidget {
   State<FriendsScreen> createState() => _FriendsScreenState();
 }
 
-class _FriendsScreenState extends State<FriendsScreen> {
+class _FriendsScreenState extends State<FriendsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
   List<Map<String, dynamic>> _requests = [];
   List<Map<String, dynamic>> _friends = [];
-  final Map<String, Map<String, bool>> _requestRelations = {}; // fromUserId -> rel map
+  final Map<String, Map<String, bool>> _requestRelations = {};
   bool _loading = true;
   String? _error;
 
@@ -26,17 +30,22 @@ class _FriendsScreenState extends State<FriendsScreen> {
     });
     try {
       final client = ApiClient.instance;
-      final requests = await client.getList('/friends/requests', withAuth: true);
+      final requests = await client.getList(
+        '/friends/requests',
+        withAuth: true,
+      );
       final friends = await client.getList('/friends', withAuth: true);
       setState(() {
-        _requests = requests.map((e) => Map<String, dynamic>.from(e as Map)).toList();
-        _friends = friends.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _requests = requests
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+        _friends = friends
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
         _loading = false;
         _requestRelations.clear();
       });
 
-      // Подгружаем relationship для каждой входящей заявки,
-      // чтобы показать кнопку "подписаться в ответ" / "подписан".
       for (final r in _requests) {
         final fromUserId = r['from_user_id'] as String?;
         if (fromUserId == null || fromUserId.isEmpty) continue;
@@ -52,9 +61,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
               'isFriends': rel['isFriends'] == true,
             };
           });
-        } catch (_) {
-          // ignore: relationship is optional for UI
-        }
+        } catch (_) {}
       }
     } on ApiException catch (e) {
       setState(() {
@@ -89,15 +96,15 @@ class _FriendsScreenState extends State<FriendsScreen> {
       _load();
     } on ApiException catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -105,164 +112,241 @@ class _FriendsScreenState extends State<FriendsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Мои друзья'),
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Обновить',
+      backgroundColor: const Color(0xFF161616),
+      body: Stack(
+        children: [
+          _buildBackgroundGradient(),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                _buildTabBar(),
+                Expanded(child: _buildBody()),
+              ],
+            ),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Повторить'),
-                        ),
-                      ],
-                    ),
-                  ),
-                )
-              : SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      FilledButton.icon(
-                        onPressed: () async {
-                          await Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const AddFriendScreen(),
-                            ),
-                          );
-                          _load();
-                        },
-                        icon: const Icon(Icons.person_add),
-                        label: const Text('Добавить в друзья'),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Друзья',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (_friends.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            'Пока нет друзей',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.grey,
-                                ),
-                          ),
-                        )
-                      else
-                        ..._friends.map((f) {
-                          final email = f['email'] as String? ?? '—';
-                          final id = f['id'] as String?;
-                          final username = (f['username'] as String?)?.trim();
-                          final displayName = (f['display_name'] as String?)?.trim();
-                          final title = (displayName?.isNotEmpty == true)
-                              ? displayName!
-                              : (username?.isNotEmpty == true ? '@$username' : email);
-                          final subtitle = username?.isNotEmpty == true ? '@$username' : email;
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person),
-                              ),
-                              title: Text(title),
-                              subtitle: Text(subtitle),
-                              onTap: id == null
-                                  ? null
-                                  : () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => ProfileScreen(userId: id),
-                                        ),
-                                      );
-                                    },
-                            ),
-                          );
-                        }),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Новые подписчики',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 8),
-                      if (_requests.isEmpty)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Text(
-                            'Нет новых подписчиков',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Colors.grey,
-                                ),
-                          ),
-                        )
-                      else
-                        ..._requests.map((r) {
-                          final fromEmail = r['from_email'] as String? ?? '—';
-                          final fromUserId = r['from_user_id'] as String?;
-                          final rel = (fromUserId == null) ? null : _requestRelations[fromUserId];
-                          final isFollowing = rel?['isFollowing'] == true;
-                          final isFriends = rel?['isFriends'] == true;
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              leading: const CircleAvatar(
-                                child: Icon(Icons.person),
-                              ),
-                              title: Text(fromEmail),
-                              subtitle: Text(isFriends ? 'Вы друзья' : 'Подписался на вас'),
-                              onTap: fromUserId == null
-                                  ? null
-                                  : () {
-                                      Navigator.of(context).push(
-                                        MaterialPageRoute<void>(
-                                          builder: (_) => ProfileScreen(userId: fromUserId),
-                                        ),
-                                      );
-                                    },
-                              trailing: fromUserId == null
-                                  ? null
-                                  : TextButton(
-                                      onPressed: () => _toggleSubscribeBack(fromUserId),
-                                      child: Text(isFollowing ? 'Подписан' : 'Подписаться в ответ'),
-                                    ),
-                            ),
-                          );
-                        }),
-                    ],
-                  ),
+    );
+  }
+
+  Widget _buildBackgroundGradient() {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topLeft,
+            radius: 1.15,
+            colors: [
+              const Color.fromARGB(255, 255, 251, 8), // Яркий коралловый
+              const Color(0xFF161616), // Ярко-желтый
+            ],
+            stops: const [0.1, 0.9],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          _buildBackButton(),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Комьюнити',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w600,
+                fontSize: 18,
+                color: Colors.white,
+              ),
+            ),
+          ),
+          _buildAddFriendButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Tooltip(
+      message: MaterialLocalizations.of(context).backButtonTooltip,
+      child: Container(
+        width: 37,
+        height: 37,
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(157, 0, 0, 0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).maybePop(),
+            splashColor: const Color.fromARGB(157, 0, 0, 0),
+            highlightColor: const Color.fromARGB(157, 0, 0, 0),
+            child: const Center(
+              child: Icon(Icons.arrow_back, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAddFriendButton() {
+    return Container(
+      width: 37,
+      height: 37,
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(157, 0, 0, 0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const AddFriendScreen()),
+            );
+            _load();
+          },
+          splashColor: const Color.fromARGB(157, 0, 0, 0),
+          highlightColor: const Color.fromARGB(157, 0, 0, 0),
+          child: const Center(
+            child: Icon(Icons.person_add, color: Colors.white, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTabBar() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      height: 40, // Уменьшаем высоту контейнера
+      decoration: BoxDecoration(
+        color: const Color(0xFF1E1E1E),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: TabBar(
+        controller: _tabController,
+        indicator: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        indicatorSize: TabBarIndicatorSize.tab,
+        labelColor: Colors.black,
+        unselectedLabelColor: Colors.white70,
+        labelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w600,
+          fontSize: 13, // Уменьшаем шрифт
+        ),
+        unselectedLabelStyle: const TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w500,
+          fontSize: 13, // Уменьшаем шрифт
+        ),
+        dividerColor: Colors.transparent,
+        // Убираем hover эффект
+        overlayColor: MaterialStateProperty.all(Colors.transparent),
+        splashFactory: NoSplash.splashFactory, // Убираем splash эффект
+        tabs: [
+          Tab(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.people, size: 16), // Уменьшаем иконку
+                SizedBox(width: 6), // Уменьшаем отступ
+                Text('Друзья'),
+              ],
+            ),
+          ),
+          Tab(
+            child: const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.person_add, size: 16), // Уменьшаем иконку
+                SizedBox(width: 6), // Уменьшаем отступ
+                Text('Подписчики'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
                 ),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _load,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Повторить'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return TabBarView(
+      controller: _tabController,
+      children: [
+        RefreshIndicator(
+          onRefresh: _load,
+          color: Colors.white,
+          backgroundColor: const Color(0xFF1E1E1E),
+          child: FriendsTab(friends: _friends),
+        ),
+        RefreshIndicator(
+          onRefresh: _load,
+          color: Colors.white,
+          backgroundColor: const Color(0xFF1E1E1E),
+          child: RequestsTab(
+            requests: _requests,
+            requestRelations: _requestRelations,
+            onToggleSubscribe: _toggleSubscribeBack,
+          ),
+        ),
+      ],
     );
   }
 }
-
