@@ -60,6 +60,8 @@ dependencies:
   app_links: ^7.0.0
   table_calendar: ^3.2.0
 
+  share_plus: ^7.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -86,6 +88,7 @@ flutter:
     - assets/avatar/left_raounded.svg
     - assets/avatar/right_rounded.svg
     - assets/achievements/
+    - assets/
 
   # To add assets to your application, add an assets section, like this:
   # assets:

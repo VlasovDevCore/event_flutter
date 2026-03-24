@@ -86,7 +86,11 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
         setState(() {
           _allUsers = (randomUsers as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
-              .where((user) => user['id'] != _currentUserId)
+              .where(
+                (user) =>
+                    user['id'] != _currentUserId &&
+                    !_friendIds.contains(user['id']),
+              ) // Исключаем себя и друзей
               .map((user) {
                 final userId = user['id'] as String;
                 user['is_friend'] = _friendIds.contains(userId);
@@ -148,7 +152,11 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
         setState(() {
           final searchedUsers = (users as List)
               .map((e) => Map<String, dynamic>.from(e as Map))
-              .where((user) => user['id'] != _currentUserId)
+              .where(
+                (user) =>
+                    user['id'] != _currentUserId &&
+                    !_friendIds.contains(user['id']),
+              ) // Исключаем себя и друзей
               .map((user) {
                 final userId = user['id'] as String;
                 user['is_friend'] = _friendIds.contains(userId);
@@ -302,22 +310,6 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
       );
     }
 
-    if (_searching) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(color: Colors.white),
-            SizedBox(height: 16),
-            Text(
-              'Поиск...',
-              style: TextStyle(color: Colors.white54, fontFamily: 'Inter'),
-            ),
-          ],
-        ),
-      );
-    }
-
     if (_error != null) {
       return Center(
         child: Column(
@@ -343,40 +335,6 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
               ),
               child: const Text('Повторить'),
             ),
-          ],
-        ),
-      );
-    }
-
-    if (_filteredUsers.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: Colors.white.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              _searchController.text.isNotEmpty
-                  ? 'Пользователи не найдены'
-                  : 'Нет доступных пользователей',
-              style: const TextStyle(color: Colors.grey, fontFamily: 'Inter'),
-              textAlign: TextAlign.center,
-            ),
-            if (_searchController.text.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Попробуйте изменить запрос',
-                style: TextStyle(
-                  color: Colors.grey.withValues(alpha: 0.7),
-                  fontSize: 12,
-                  fontFamily: 'Inter',
-                ),
-              ),
-            ],
           ],
         ),
       );
@@ -427,13 +385,16 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
         const SizedBox(height: 16),
 
         // Поле поиска
+        // Поле поиска
         TextField(
           controller: _searchController,
-          style: const TextStyle(color: Colors.white),
+          style: const TextStyle(color: Colors.white, fontFamily: 'Inter'),
           decoration: InputDecoration(
-            hintText: 'Поиск по имени или username...',
-            hintStyle: const TextStyle(color: Colors.white54),
-            prefixIcon: const Icon(Icons.search, color: Colors.white54),
+            hintText: 'Найди нового друга',
+            hintStyle: const TextStyle(
+              color: Color.fromARGB(155, 255, 255, 255),
+              fontFamily: 'Inter',
+            ),
             suffixIcon: _searchController.text.isNotEmpty
                 ? IconButton(
                     icon: const Icon(Icons.clear, color: Colors.white54),
@@ -444,7 +405,10 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
                       });
                     },
                   )
-                : null,
+                : const Icon(
+                    Icons.search,
+                    color: Color.fromARGB(255, 255, 255, 255),
+                  ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFF2C2C2C)),
@@ -455,7 +419,7 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF3C3C3C)),
+              borderSide: const BorderSide(color: Colors.white),
             ),
             filled: true,
             fillColor: const Color(0xFF1E1E1E),
@@ -463,26 +427,89 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
         ),
         const SizedBox(height: 16),
 
-        // Список пользователей
-        ..._filteredUsers.map((user) => _buildUserCard(user)).toList(),
-
-        const SizedBox(height: 16),
-
-        // Рекомендации снизу
-        if (_searchController.text.isEmpty && _filteredUsers.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
+        // Индикатор поиска (показываем только если идет поиск)
+        if (_searching)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
             child: Center(
-              child: Text(
-                '✨ Рекомендации (начните вводить имя для поиска)',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 12,
-                  fontFamily: 'Inter',
-                  fontStyle: FontStyle.italic,
-                ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 16),
+                  Text(
+                    'Поиск...',
+                    style: TextStyle(
+                      color: Colors.white54,
+                      fontFamily: 'Inter',
+                    ),
+                  ),
+                ],
               ),
             ),
+          )
+        else if (_filteredUsers.isEmpty)
+          // Пустое состояние
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 48),
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.people_outline,
+                    size: 64,
+                    color: Colors.white.withValues(alpha: 0.3),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    _searchController.text.isNotEmpty
+                        ? 'Пользователи не найдены'
+                        : 'Нет доступных пользователей',
+                    style: const TextStyle(
+                      color: Colors.grey,
+                      fontFamily: 'Inter',
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  if (_searchController.text.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Попробуйте изменить запрос',
+                      style: TextStyle(
+                        color: Colors.grey.withValues(alpha: 0.7),
+                        fontSize: 12,
+                        fontFamily: 'Inter',
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          )
+        else
+          // Список пользователей
+          Column(
+            children: [
+              ..._filteredUsers.map((user) => _buildUserCard(user)).toList(),
+              const SizedBox(height: 16),
+              // Рекомендации снизу
+              if (_searchController.text.isEmpty && _filteredUsers.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Center(
+                    child: Text(
+                      '✨ Введи имя — найдём друзей',
+                      style: TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                        fontFamily: "Inter",
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
       ],
     );
@@ -498,34 +525,103 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     final sending = id != null && _sending[id] == true;
 
     final title = (displayName?.isNotEmpty == true) ? displayName! : username;
-
-    String buttonText = 'Добавить';
-    bool buttonDisabled = false;
-    VoidCallback? onPressed;
-
-    if (isFriend) {
-      buttonText = 'В друзьях';
-      buttonDisabled = true;
-      onPressed = null;
-    } else if (requestSent) {
-      buttonText = 'Отменить заявку';
-      buttonDisabled = false;
-      onPressed = () => _cancelRequest(id!);
-    } else if (sending) {
-      buttonText = 'Отправка...';
-      buttonDisabled = true;
-      onPressed = null;
-    } else {
-      buttonText = 'Добавить';
-      buttonDisabled = false;
-      onPressed = () => _addFriend(id!);
-    }
+    final subtitle = '@$username';
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: InkWell(
+      color: const Color(0xFF141414),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: const Color.fromARGB(10, 255, 255, 255),
+          width: 1,
+        ),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: 2),
+        leading: _buildAvatar(avatarUrl, displayName, username),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          ],
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(
+            color: Color.fromARGB(80, 255, 255, 255),
+            fontSize: 13,
+            fontFamily: 'Inter',
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
+        trailing: id == null
+            ? null
+            : Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isFriend
+                        ? const Color(0xFF2C2C2C)
+                        : requestSent
+                        ? const Color(0xFF2C2C2C)
+                        : Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      if (isFriend) {
+                        return;
+                      } else if (requestSent) {
+                        _cancelRequest(id!);
+                      } else if (!sending) {
+                        _addFriend(id!);
+                      }
+                    },
+                    splashColor: Colors.transparent,
+                    highlightColor: Colors.transparent,
+                    child: sending
+                        ? const Center(
+                            child: SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            ),
+                          )
+                        : Center(
+                            child: Icon(
+                              isFriend
+                                  ? Icons.check
+                                  : requestSent
+                                  ? Icons.close
+                                  : Icons.person_add,
+                              color: isFriend || requestSent
+                                  ? Colors.white
+                                  : Colors.black,
+                              size: 20,
+                            ),
+                          ),
+                  ),
+                ),
+              ),
         onTap: () {
           if (id != null) {
             Navigator.of(context).push(
@@ -535,69 +631,6 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
             );
           }
         },
-        borderRadius: BorderRadius.circular(12),
-        child: ListTile(
-          leading: _buildAvatar(avatarUrl, displayName, username),
-          title: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'Inter',
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          subtitle: Text(
-            '@$username',
-            style: const TextStyle(color: Colors.white54, fontFamily: 'Inter'),
-          ),
-          trailing: id == null
-              ? null
-              : (buttonDisabled
-                    ? Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2C2C2C),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          buttonText,
-                          style: TextStyle(
-                            color: isFriend || requestSent
-                                ? Colors.white54
-                                : Colors.white,
-                            fontFamily: 'Inter',
-                            fontSize: 13,
-                          ),
-                        ),
-                      )
-                    : FilledButton(
-                        onPressed: onPressed,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: const Color(0xFF2C2C2C),
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        child: sending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
-                                ),
-                              )
-                            : Text(buttonText),
-                      )),
-        ),
       ),
     );
   }
@@ -608,35 +641,30 @@ class _AddFriendScreenState extends State<AddFriendScreen> {
     String? username,
   ) {
     if (avatarUrl != null && avatarUrl.isNotEmpty) {
-      return CircleAvatar(
-        backgroundColor: const Color(0xFF2C2C2C),
-        radius: 24,
-        backgroundImage: NetworkImage(avatarUrl),
-        onBackgroundImageError: (_, __) {},
-        child: null,
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Image.network(
+          avatarUrl,
+          width: 55,
+          height: 62,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 52,
+              height: 52,
+              color: const Color(0xFF2C2C2C),
+              child: const Icon(Icons.person, color: Colors.white70),
+            );
+          },
+        ),
       );
     }
 
-    String initials = '';
-    if (displayName != null && displayName.isNotEmpty) {
-      initials = displayName[0].toUpperCase();
-    } else if (username != null && username.isNotEmpty) {
-      initials = username[0].toUpperCase();
-    } else {
-      initials = '?';
-    }
-
-    return CircleAvatar(
-      backgroundColor: const Color(0xFF2C2C2C),
-      radius: 24,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 18,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+    return Container(
+      width: 52,
+      height: 52,
+      color: const Color(0xFF2C2C2C),
+      child: const Icon(Icons.person, color: Colors.white70),
     );
   }
 }

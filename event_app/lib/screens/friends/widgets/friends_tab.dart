@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 import '../../profile/profile_screen.dart';
 import '../../chat/direct_chat_screen.dart';
 import '../../../services/api_client.dart';
@@ -7,6 +8,25 @@ class FriendsTab extends StatelessWidget {
   final List<Map<String, dynamic>> friends;
 
   const FriendsTab({super.key, required this.friends});
+
+  void _shareApp(BuildContext context) async {
+    final shareText = '''
+Приглашаю тебя в EventApp! 🎉
+Создавай события, находи друзей и проводи время вместе!
+
+Скачай приложение: https://play.google.com/store/apps/details?id=com.eventapp
+''';
+
+    try {
+      await Share.share(shareText);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка при открытии шаринга: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,51 +37,98 @@ class FriendsTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Синий скруглённый блок
-        Container(
-          margin: const EdgeInsets.all(16),
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
-            ),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.people_alt, color: Colors.white, size: 24),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Друзья',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontFamily: 'Inter',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
+        const SizedBox(height: 15),
+        Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: 16,
+          ), // Отступы по бокам
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => _shareApp(context),
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: Container(
+                height: 100,
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      Color.fromARGB(255, 65, 129, 231),
+                      Color.fromARGB(255, 14, 66, 238),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(20),
+                  child: Stack(
+                    clipBehavior: Clip.hardEdge,
+                    children: [
+                      // Контент слева с центрированием по вертикали
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        child: Container(
+                          width:
+                              MediaQuery.of(context).size.width -
+                              152, // Уменьшено на 32px (отступы 16+16)
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Приглашай друзей',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'Inter',
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Вместе создавать события и находить компании',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    Text(
-                      'Общайтесь с друзьями в чате и встречайтесь',
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.8),
-                        fontFamily: 'Inter',
-                        fontSize: 12,
+                      // Изображение абсолютно справа
+                      Positioned(
+                        right: -45,
+                        top: -20,
+                        bottom: -20,
+                        child: Align(
+                          alignment: Alignment.center,
+                          child: Image.asset(
+                            'assets/share.png',
+                            width: 200,
+                            height: 200,
+                            fit: BoxFit.contain,
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ],
+            ),
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          padding: const EdgeInsets.fromLTRB(20, 20, 16, 0),
           child: Row(
             children: [
               Text(
@@ -77,13 +144,13 @@ class FriendsTab extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2C2C2C),
-                  borderRadius: BorderRadius.circular(20),
+                  color: const Color.fromARGB(255, 255, 255, 255),
+                  borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   '${friends.length}',
                   style: const TextStyle(
-                    color: Colors.white70,
+                    color: Color.fromARGB(255, 0, 0, 0),
                     fontFamily: 'Inter',
                     fontSize: 14,
                     fontWeight: FontWeight.w500,
@@ -175,17 +242,23 @@ class FriendCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: const Color(0xFF141414),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: const Color.fromARGB(10, 255, 255, 255),
+          width: 1,
+        ),
+      ),
       child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 0),
+        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: 2),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: avatarUrl.isNotEmpty
               ? Image.network(
                   avatarUrl,
-                  width: 52,
-                  height: 52,
+                  width: 55,
+                  height: 62,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
@@ -203,30 +276,61 @@ class FriendCard extends StatelessWidget {
                   child: const Icon(Icons.person, color: Colors.white70),
                 ),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w500,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          ],
         ),
         subtitle: Text(
           subtitle,
-          style: const TextStyle(color: Colors.white54, fontFamily: 'Inter'),
+          style: const TextStyle(
+            color: Color.fromARGB(80, 255, 255, 255),
+            fontSize: 13,
+            fontFamily: 'Inter',
+          ),
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
         ),
-        trailing: IconButton(
-          icon: const Icon(Icons.message, color: Colors.white70, size: 20),
-          onPressed: id == null
-              ? null
-              : () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          DirectChatScreen(userId: id!, title: title),
-                    ),
-                  );
-                },
+        trailing: Padding(
+          padding: const EdgeInsets.only(right: 8),
+          child: Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: id == null
+                  ? null
+                  : () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) =>
+                              DirectChatScreen(userId: id!, title: title),
+                        ),
+                      );
+                    },
+              splashColor: Colors.transparent,
+              highlightColor: Colors.transparent,
+              child: const Center(
+                child: Icon(Icons.message, color: Colors.black, size: 20),
+              ),
+            ),
+          ),
         ),
         onTap: id == null
             ? null

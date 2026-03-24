@@ -97,17 +97,13 @@ class _RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final fromUserId = request['from_user_id'] as String?;
 
-    // Получаем данные напрямую из request
     final username = (request['username'] as String?)?.trim();
     final displayName = (request['display_name'] as String?)?.trim();
     final avatarUrl = _getFullAvatarUrl(request['avatar_url'] as String?);
 
-    // Заголовок: displayName или username
     final title = (displayName?.isNotEmpty == true)
         ? displayName!
-        : (username?.isNotEmpty == true ? username! : 'Пользователь');
-
-    // Подзаголовок: всегда показываем username если есть
+        : (username?.isNotEmpty == true ? '@$username' : 'Пользователь');
     final subtitle = username?.isNotEmpty == true ? '@$username' : null;
 
     final rel = (fromUserId == null) ? null : requestRelations[fromUserId];
@@ -115,27 +111,49 @@ class _RequestCard extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
-      color: const Color(0xFF1E1E1E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      color: const Color(0xFF141414),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: BorderSide(
+          color: const Color.fromARGB(10, 255, 255, 255),
+          width: 1,
+        ),
+      ),
       child: ListTile(
+        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: 2),
         leading: _buildAvatar(avatarUrl, displayName, username),
-        title: Text(
-          title,
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w500,
-          ),
+        title: Row(
+          children: [
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
+          ],
         ),
         subtitle: subtitle != null
             ? Text(
                 subtitle,
                 style: const TextStyle(
-                  color: Colors.white54,
+                  color: Color.fromARGB(80, 255, 255, 255),
+                  fontSize: 13,
                   fontFamily: 'Inter',
                 ),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               )
             : null,
+        trailing: fromUserId == null
+            ? null
+            : _buildSubscribeButton(fromUserId, isFollowing),
         onTap: fromUserId == null
             ? null
             : () {
@@ -145,64 +163,62 @@ class _RequestCard extends StatelessWidget {
                   ),
                 );
               },
-        trailing: fromUserId == null
-            ? null
-            : _buildSubscribeButton(fromUserId, isFollowing),
       ),
     );
   }
 
   Widget _buildAvatar(String avatarUrl, String? displayName, String? username) {
-    // Если есть URL аватара
     if (avatarUrl.isNotEmpty) {
-      return CircleAvatar(
-        backgroundColor: const Color(0xFF2C2C2C),
-        radius: 24,
-        backgroundImage: NetworkImage(avatarUrl),
-        onBackgroundImageError: (_, __) {},
-        child: null,
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12), // Скругление как в FriendCard
+        child: Image.network(
+          avatarUrl,
+          width: 55,
+          height: 62,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return Container(
+              width: 52,
+              height: 52,
+              color: const Color(0xFF2C2C2C),
+              child: const Icon(Icons.person, color: Colors.white70),
+            );
+          },
+        ),
       );
     }
 
-    // Если нет аватара, показываем инициалы
-    String initials = '';
-    if (displayName != null && displayName.isNotEmpty) {
-      initials = displayName[0].toUpperCase();
-    } else if (username != null && username.isNotEmpty) {
-      initials = username[0].toUpperCase();
-    } else {
-      initials = '?';
-    }
-
-    return CircleAvatar(
-      backgroundColor: const Color(0xFF2C2C2C),
-      radius: 24,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white70,
-          fontSize: 18,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
+    // Если нет аватара, показываем иконку как в FriendCard
+    return Container(
+      width: 52,
+      height: 52,
+      color: const Color(0xFF2C2C2C),
+      child: const Icon(Icons.person, color: Colors.white70),
     );
   }
 
   Widget _buildSubscribeButton(String fromUserId, bool isFollowing) {
-    return TextButton(
-      onPressed: () => onToggleSubscribe(fromUserId),
-      style: TextButton.styleFrom(
-        foregroundColor: Colors.white,
-        backgroundColor: const Color(0xFF2C2C2C),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      child: Text(
-        isFollowing ? 'Подписан' : 'Подписаться в ответ',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w500,
-          fontSize: 13,
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: isFollowing ? const Color(0xFF2C2C2C) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => onToggleSubscribe(fromUserId),
+          splashColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: Center(
+            child: Icon(
+              isFollowing ? Icons.check : Icons.person_add,
+              color: isFollowing ? Colors.white : Colors.black,
+              size: 20,
+            ),
+          ),
         ),
       ),
     );

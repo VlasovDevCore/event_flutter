@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../../services/api_client.dart';
 import '../profile/profile_screen.dart';
 import 'add_friend_screen.dart';
@@ -149,12 +148,12 @@ class _FriendsScreenState extends State<FriendsScreen>
         decoration: BoxDecoration(
           gradient: RadialGradient(
             center: Alignment.topLeft,
-            radius: 1.15,
+            radius: 0.55,
             colors: [
-              const Color.fromARGB(255, 255, 251, 8), // Яркий коралловый
-              const Color(0xFF161616), // Ярко-желтый
+              const Color.fromARGB(197, 29, 29, 29),
+              const Color(0xFF161616),
             ],
-            stops: const [0.1, 0.9],
+            stops: const [0.1, 4.9],
           ),
         ),
       ),
@@ -242,56 +241,70 @@ class _FriendsScreenState extends State<FriendsScreen>
   Widget _buildTabBar() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16),
-      height: 40, // Уменьшаем высоту контейнера
+      padding: const EdgeInsets.all(2), // Padding для обводки
       decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
+        color: const Color(0xFF161616),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.1), width: 1),
       ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: Colors.white,
+      child: Container(
+        height: 44,
+        decoration: BoxDecoration(
+          color: const Color(0xFF161616),
           borderRadius: BorderRadius.circular(12),
         ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        labelColor: Colors.black,
-        unselectedLabelColor: Colors.white70,
-        labelStyle: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w600,
-          fontSize: 13, // Уменьшаем шрифт
-        ),
-        unselectedLabelStyle: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w500,
-          fontSize: 13, // Уменьшаем шрифт
-        ),
-        dividerColor: Colors.transparent,
-        // Убираем hover эффект
-        overlayColor: MaterialStateProperty.all(Colors.transparent),
-        splashFactory: NoSplash.splashFactory, // Убираем splash эффект
-        tabs: [
-          Tab(
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.people, size: 16), // Уменьшаем иконку
-                SizedBox(width: 6), // Уменьшаем отступ
-                Text('Друзья'),
-              ],
-            ),
+        child: TabBar(
+          controller: _tabController,
+          indicator: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.3), width: 1),
           ),
-          Tab(
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.person_add, size: 16), // Уменьшаем иконку
-                SizedBox(width: 6), // Уменьшаем отступ
-                Text('Подписчики'),
-              ],
-            ),
+          indicatorSize: TabBarIndicatorSize.tab,
+          labelColor: Colors.black,
+          unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
-        ],
+          unselectedLabelStyle: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w500,
+            fontSize: 13,
+          ),
+          dividerColor: Colors.transparent,
+          overlayColor: MaterialStateProperty.all(Colors.transparent),
+          splashFactory: NoSplash.splashFactory,
+          tabs: [
+            Tab(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.people, size: 16),
+                    SizedBox(width: 6),
+                    Text('Друзья'),
+                  ],
+                ),
+              ),
+            ),
+            Tab(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.person_add, size: 16),
+                    SizedBox(width: 6),
+                    Text('Подписчики'),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -333,13 +346,13 @@ class _FriendsScreenState extends State<FriendsScreen>
         RefreshIndicator(
           onRefresh: _load,
           color: Colors.white,
-          backgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: const Color(0xFF161616),
           child: FriendsTab(friends: _friends),
         ),
         RefreshIndicator(
           onRefresh: _load,
           color: Colors.white,
-          backgroundColor: const Color(0xFF1E1E1E),
+          backgroundColor: const Color(0xFF161616),
           child: RequestsTab(
             requests: _requests,
             requestRelations: _requestRelations,
