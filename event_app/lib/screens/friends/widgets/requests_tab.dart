@@ -41,17 +41,19 @@ class RequestsTab extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.person_add_outlined,
-              size: 64,
-              color: Colors.white.withValues(alpha: 0.3),
+            Image.asset(
+              'assets/friends/headphone-dynamic-color.png',
+              width: 120,
+              height: 120,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 24),
             Text(
               'Нет новых подписчиков',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
+                color: Colors.white,
                 fontFamily: 'Inter',
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
               ),
             ),
             const SizedBox(height: 8),
@@ -60,6 +62,7 @@ class RequestsTab extends StatelessWidget {
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.grey,
                 fontFamily: 'Inter',
+                fontSize: 14,
               ),
               textAlign: TextAlign.center,
             ),
@@ -120,7 +123,7 @@ class _RequestCard extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: 2),
+        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: -1),
         leading: _buildAvatar(avatarUrl, displayName, username),
         title: Row(
           children: [
@@ -170,7 +173,7 @@ class _RequestCard extends StatelessWidget {
   Widget _buildAvatar(String avatarUrl, String? displayName, String? username) {
     if (avatarUrl.isNotEmpty) {
       return ClipRRect(
-        borderRadius: BorderRadius.circular(12), // Скругление как в FriendCard
+        borderRadius: BorderRadius.circular(12),
         child: Image.network(
           avatarUrl,
           width: 55,
@@ -188,7 +191,6 @@ class _RequestCard extends StatelessWidget {
       );
     }
 
-    // Если нет аватара, показываем иконку как в FriendCard
     return Container(
       width: 52,
       height: 52,

@@ -408,6 +408,43 @@ router.get('/me/achievements', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
+router.get('/check-username', async (req, res) => {
+  const { username } = req.query;
+  
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+  
+  if (!/^[a-zA-Z0-9._]{3,20}$/.test(username)) {
+    return res.status(400).json({ error: 'Invalid username format' });
+  }
+  
+  const client = await pool.connect();
+  try {
+    const result = await client.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
+    
+    if (result.rowCount && result.rowCount > 0) {
+      return res.status(409).json({ 
+        error: 'Username already taken',
+        available: false 
+      });
+    }
+    
+    return res.status(200).json({ 
+      available: true,
+      message: 'Username is available' 
+    });
+  } catch (err) {
+    console.error('Error checking username:', err);
+    return res.status(500).json({ error: 'Internal server error' });
+  } finally {
+    client.release();
+  }
+});
+
 // Поиск пользователей (для добавления в друзья): по email, исключая себя, уже друзей и с ожидающими заявками
 router.get('/search', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.user?.id;

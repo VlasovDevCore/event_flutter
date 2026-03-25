@@ -30,18 +30,14 @@ class FriendsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (friends.isEmpty) {
-      return _buildEmptyState(context);
-    }
+    final hasFriends = friends.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 15),
         Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: 16,
-          ), // Отступы по бокам
+          padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Material(
             color: Colors.transparent,
             child: InkWell(
@@ -67,15 +63,12 @@ class FriendsTab extends StatelessWidget {
                   child: Stack(
                     clipBehavior: Clip.hardEdge,
                     children: [
-                      // Контент слева с центрированием по вертикали
                       Positioned(
                         left: 0,
                         top: 0,
                         bottom: 0,
                         child: Container(
-                          width:
-                              MediaQuery.of(context).size.width -
-                              152, // Уменьшено на 32px (отступы 16+16)
+                          width: MediaQuery.of(context).size.width - 152,
                           padding: const EdgeInsets.symmetric(horizontal: 20),
                           child: const Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -105,7 +98,6 @@ class FriendsTab extends StatelessWidget {
                           ),
                         ),
                       ),
-                      // Изображение абсолютно справа
                       Positioned(
                         right: -45,
                         top: -20,
@@ -113,7 +105,7 @@ class FriendsTab extends StatelessWidget {
                         child: Align(
                           alignment: Alignment.center,
                           child: Image.asset(
-                            'assets/share.png',
+                            'assets/friends/share.png',
                             width: 200,
                             height: 200,
                             fit: BoxFit.contain,
@@ -127,85 +119,93 @@ class FriendsTab extends StatelessWidget {
             ),
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 20, 16, 0),
-          child: Row(
-            children: [
-              Text(
-                'Все друзья',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Inter',
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color.fromARGB(255, 255, 255, 255),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '${friends.length}',
+        if (hasFriends) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 16, 0),
+            child: Row(
+              children: [
+                Text(
+                  'Все друзья',
                   style: const TextStyle(
-                    color: Color.fromARGB(255, 0, 0, 0),
+                    color: Colors.white,
                     fontFamily: 'Inter',
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color.fromARGB(255, 255, 255, 255),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${friends.length}',
+                    style: const TextStyle(
+                      color: Color.fromARGB(255, 0, 0, 0),
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: friends.length,
+              itemBuilder: (context, index) {
+                final friend = friends[index];
+                return FriendCard(friend: friend);
+              },
+            ),
+          ),
+        ] else ...[
+          const SizedBox(height: 40),
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/friends/zoom-dynamic-color.png',
+                    width: 120,
+                    height: 120,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Пока нет друзей',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontFamily: 'Inter',
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Пригласи друзей по ссылке выше\nи начинайте общаться!',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Colors.grey,
+                      fontFamily: 'Inter',
+                      fontSize: 14,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: ListView.builder(
-            padding: const EdgeInsets.all(16),
-            itemCount: friends.length,
-            itemBuilder: (context, index) {
-              final friend = friends[index];
-              return FriendCard(friend: friend);
-            },
-          ),
-        ),
+          const Spacer(),
+        ],
       ],
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.people_outline,
-              size: 64,
-              color: Colors.white.withValues(alpha: 0.3),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Пока нет друзей',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Colors.grey,
-                fontFamily: 'Inter',
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Нажмите на кнопку "+" вверху, чтобы добавить друга',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey,
-                fontFamily: 'Inter',
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -251,7 +251,7 @@ class FriendCard extends StatelessWidget {
         ),
       ),
       child: ListTile(
-        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: 2),
+        contentPadding: const EdgeInsets.only(left: 10, right: 10, bottom: -1),
         leading: ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: avatarUrl.isNotEmpty

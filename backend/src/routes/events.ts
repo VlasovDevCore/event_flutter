@@ -364,11 +364,12 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
     const result = await client.query(
       `
       SELECT m.id,
-             m.event_id,
-             m.user_id,
-             u.email AS user_email,
-             m.text,
-             m.created_at
+            m.event_id,
+            m.user_id,
+            u.email AS user_email,
+            u.display_name AS user_display_name,
+            m.text,
+            m.created_at
       FROM event_messages m
       LEFT JOIN users u ON u.id = m.user_id
       WHERE m.event_id = $1
@@ -415,7 +416,7 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
       [eventId, userId, text.trim()],
     );
     const row = result.rows[0] as Record<string, unknown>;
-    const userRow = await client.query('SELECT email FROM users WHERE id = $1', [userId]);
+    const userRow = await client.query('SELECT email, display_name FROM users WHERE id = $1', [userId]);
     (row as Record<string, unknown>).user_email = (userRow.rows[0] as { email: string })?.email ?? null;
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');

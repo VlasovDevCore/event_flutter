@@ -39,6 +39,8 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Event> _visibleEvents = [];
   Event? _selectedEventPreview;
   bool _previewLoading = false;
+  bool _isLoadingEvents = false;
+  bool _backPressedRecently = false;
   Timer? _visibleEventsDebounce;
   Timer? _geoMoveTimer;
 
@@ -53,7 +55,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final me = _currentUserEmail();
     if (me == null) return event.rsvpStatus == 1;
 
-    final inGoingUsers = event.goingUsers.any((e) => e.trim().toLowerCase() == me.toLowerCase());
+    final inGoingUsers = event.goingUsers.any(
+      (e) => e.trim().toLowerCase() == me.toLowerCase(),
+    );
     if (inGoingUsers) return true;
 
     final inGoingProfiles = event.goingUserProfiles.any((p) {
@@ -63,7 +67,9 @@ class _HomeScreenState extends State<HomeScreen> {
     });
     if (inGoingProfiles) return true;
 
-    final inNotGoingUsers = event.notGoingUsers.any((e) => e.trim().toLowerCase() == me.toLowerCase());
+    final inNotGoingUsers = event.notGoingUsers.any(
+      (e) => e.trim().toLowerCase() == me.toLowerCase(),
+    );
     if (inNotGoingUsers) return false;
 
     final inNotGoingProfiles = event.notGoingUserProfiles.any((p) {
@@ -91,7 +97,11 @@ class _HomeScreenState extends State<HomeScreen> {
     _initLocation(zoom: 13, immediateZoom: false);
   }
 
-  void _animateMapTo(LatLng targetCenter, {required double zoom, Duration duration = const Duration(milliseconds: 650)}) {
+  void _animateMapTo(
+    LatLng targetCenter, {
+    required double zoom,
+    Duration duration = const Duration(milliseconds: 650),
+  }) {
     _geoMoveTimer?.cancel();
 
     final startCenter = _mapController.camera.center;
@@ -105,7 +115,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     // ~60fps update loop
     const tickMs = 16;
-    _geoMoveTimer = Timer.periodic(const Duration(milliseconds: tickMs), (timer) {
+    _geoMoveTimer = Timer.periodic(const Duration(milliseconds: tickMs), (
+      timer,
+    ) {
       final elapsedMs = DateTime.now().difference(startTime).inMilliseconds;
       final t = (elapsedMs / totalMs).clamp(0.0, 1.0);
       final eased = Curves.easeInOut.transform(t);
@@ -122,10 +134,13 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadEventsFromApi() async {
+    if (_isLoadingEvents) return;
+    _isLoadingEvents = true;
     try {
       final client = ApiClient.instance;
       final items = await client.getList('/events');
       final events = _parseEventsFromJson(items);
+      if (!mounted) return;
       setState(() {
         _events = events;
       });
@@ -135,6 +150,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось загрузить события')),
       );
+    } finally {
+      _isLoadingEvents = false;
     }
   }
 
@@ -203,11 +220,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return event.goingUsers
         .map(
-          (name) => PreviewParticipant(
-            label: name,
-            avatarUrl: null,
-            status: 1,
-          ),
+          (name) => PreviewParticipant(label: name, avatarUrl: null, status: 1),
         )
         .toList();
   }
@@ -219,13 +232,17 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     try {
-      final data = await ApiClient.instance.get('/events/${event.id}', withAuth: true);
+      final data = await ApiClient.instance.get(
+        '/events/${event.id}',
+        withAuth: true,
+      );
       final loaded = Event.fromApiMap(data);
 
       if (!mounted) return;
       setState(() {
         _events = _events.map((e) => e.id == loaded.id ? loaded : e).toList();
-        if (_selectedEventPreview != null && _selectedEventPreview!.id == loaded.id) {
+        if (_selectedEventPreview != null &&
+            _selectedEventPreview!.id == loaded.id) {
           _selectedEventPreview = loaded;
         }
         _previewLoading = false;
@@ -240,12 +257,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _refreshEventById(String eventId) async {
     try {
-      final data = await ApiClient.instance.get('/events/$eventId', withAuth: true);
+      final data = await ApiClient.instance.get(
+        '/events/$eventId',
+        withAuth: true,
+      );
       final loaded = Event.fromApiMap(data);
       if (!mounted) return;
       setState(() {
         _events = _events.map((e) => e.id == loaded.id ? loaded : e).toList();
-        if (_selectedEventPreview != null && _selectedEventPreview!.id == loaded.id) {
+        if (_selectedEventPreview != null &&
+            _selectedEventPreview!.id == loaded.id) {
           _selectedEventPreview = loaded;
         }
       });
@@ -269,7 +290,11 @@ class _HomeScreenState extends State<HomeScreen> {
       List<EventUserProfile> parseProfiles(List raw) {
         return raw
             .where((e) => e is Map)
-            .map((e) => EventUserProfile.fromApiMap(Map<String, dynamic>.from(e as Map)))
+            .map(
+              (e) => EventUserProfile.fromApiMap(
+                Map<String, dynamic>.from(e as Map),
+              ),
+            )
             .toList();
       }
 
@@ -356,16 +381,17 @@ class _HomeScreenState extends State<HomeScreen> {
 
       setState(() {
         _events = _events.map((e) => e.id == updated.id ? updated : e).toList();
-        if (_selectedEventPreview != null && _selectedEventPreview!.id == updated.id) {
+        if (_selectedEventPreview != null &&
+            _selectedEventPreview!.id == updated.id) {
           _selectedEventPreview = updated;
         }
         _previewLoading = false;
       });
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -444,18 +470,19 @@ class _HomeScreenState extends State<HomeScreen> {
           onTap: onPressed,
           splashColor: pressedBackground.withOpacity(0.5),
           highlightColor: pressedBackground,
-          child: Center(
-            child: Icon(icon, color: foreground),
-          ),
+          child: Center(child: Icon(icon, color: foreground)),
         ),
       ),
     );
-    
+
     if (tooltip == null || tooltip.isEmpty) return button;
     return Tooltip(message: tooltip, child: button);
   }
 
-  Future<void> _initLocation({double zoom = 16, bool immediateZoom = true}) async {
+  Future<void> _initLocation({
+    double zoom = 16,
+    bool immediateZoom = true,
+  }) async {
     final serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
@@ -468,7 +495,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (!mounted) return;
 
-    final targetZoom = _mapController.camera.zoom < zoom ? zoom : _mapController.camera.zoom;
+    final targetZoom = _mapController.camera.zoom < zoom
+        ? zoom
+        : _mapController.camera.zoom;
     if (immediateZoom && _mapController.camera.zoom != targetZoom) {
       // Быстро "приближаем" карту, чтобы пользователь видел действие сразу.
       // Точный переход к координатам произойдёт после получения позиции.
@@ -547,11 +576,15 @@ class _HomeScreenState extends State<HomeScreen> {
         notGoingUsers: const [],
         goingUserProfiles: const [],
         notGoingUserProfiles: const [],
-        endsAt: created['ends_at'] != null ? DateTime.parse(created['ends_at'] as String) : null,
+        endsAt: created['ends_at'] != null
+            ? DateTime.parse(created['ends_at'] as String)
+            : null,
         creatorId: created['created_by_user_id']?.toString(),
         creatorEmail: created['created_by_email']?.toString(),
-        creatorName: (created['created_by_display_name'] ?? created['created_by_username'])
-            ?.toString(),
+        creatorName:
+            (created['created_by_display_name'] ??
+                    created['created_by_username'])
+                ?.toString(),
       );
 
       setState(() {
@@ -560,15 +593,24 @@ class _HomeScreenState extends State<HomeScreen> {
       _recomputeVisibleEvents();
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Ошибка сервера: ${e.message}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Ошибка сервера: ${e.message}')));
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Не удалось создать событие')),
       );
     }
+  }
+
+  Future<bool> _onWillPop() async {
+    if (_backPressedRecently) return false;
+    _backPressedRecently = true;
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _backPressedRecently = false;
+    });
+    return true;
   }
 
   @override
@@ -616,276 +658,292 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ];
 
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: Stack(
-        children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: const LatLng(55.751244, 37.618423),
-              initialZoom: 11,
-              minZoom: 10,
-              backgroundColor: Colors.transparent,
-              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-              onTap: (_, __) {
-                if (_selectedEventPreview == null) return;
-                setState(() {
-                  _selectedEventPreview = null;
-                  _previewLoading = false;
-                });
-              },
-              onPositionChanged: (position, hasGesture) {
-                _scheduleRecomputeVisibleEvents();
-                if (hasGesture) {
-                  final bounds = position.visibleBounds;
-                  _debouncedLoadEventsByBounds(bounds);
-                }
-              },
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-                subdomains: const ['a', 'b', 'c', 'd'],
-                retinaMode: true,
-                userAgentPackageName: 'com.example.event_app',
-                tileProvider: CancellableNetworkTileProvider(),
-              ),
-              MarkerClusterLayerWidget(
-                options: MarkerClusterLayerOptions(
-                  markers: eventMarkers,
-                  rotate: true,
-                  maxClusterRadius: 60,
-                  size: const Size(46, 46),
-                  showPolygon: false,
-                  builder: (context, markers) {
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.25),
-                            blurRadius: 4,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        markers.length.toString(),
-                        style: const TextStyle(
-                          color: Colors.black,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    );
-                  },
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: Stack(
+          children: [
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: const LatLng(55.751244, 37.618423),
+                initialZoom: 11,
+                minZoom: 10,
+                backgroundColor: Colors.transparent,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
                 ),
+                onTap: (_, __) {
+                  if (_selectedEventPreview == null) return;
+                  setState(() {
+                    _selectedEventPreview = null;
+                    _previewLoading = false;
+                  });
+                },
+                onPositionChanged: (position, hasGesture) {
+                  _scheduleRecomputeVisibleEvents();
+                  if (hasGesture) {
+                    final bounds = position.visibleBounds;
+                    _debouncedLoadEventsByBounds(bounds);
+                  }
+                },
               ),
-              MarkerLayer(markers: userMarker),
-            ],
-          ),
-          Positioned(
-            top: topPadding + 5,
-            right: 10,
-            child: IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xCC161616),
-                foregroundColor: const Color(0xFFDFE3EC),
-                elevation: 0,
-                padding: const EdgeInsets.all(10),
-                iconSize: 22, 
-              ),
-              icon: const Icon(Icons.person),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-          Positioned(
-            top: topPadding + 10 + 48,
-            right: 10,
-            child: IconButton(
-              style: IconButton.styleFrom(
-                backgroundColor: const Color(0xCC161616),
-                foregroundColor: const Color(0xFFDFE3EC),
-                elevation: 0,
-                padding: const EdgeInsets.all(10),
-                iconSize: 22, 
-              ),
-              icon: const Icon(Icons.my_location),
-              onPressed: () {
-                _initLocation(zoom: 16);
-              },
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: menuBottom,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                _mapRoundIconButton(
-                  icon: Icons.list,
-                  onPressed: _openVisibleEventsSheet,
+                TileLayer(
+                  urlTemplate:
+                      'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+                  subdomains: const ['a', 'b', 'c', 'd'],
+                  retinaMode: true,
+                  userAgentPackageName: 'com.example.event_app',
+                  tileProvider: CancellableNetworkTileProvider(),
                 ),
-                _mapRoundIconButton(
-                  icon: Icons.chat,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const MyRoomsScreen(),
-                      ),
-                    );
-                  },
+                MarkerClusterLayerWidget(
+                  options: MarkerClusterLayerOptions(
+                    markers: eventMarkers,
+                    rotate: true,
+                    maxClusterRadius: 60,
+                    size: const Size(46, 46),
+                    showPolygon: false,
+                    builder: (context, markers) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.25),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          markers.length.toString(),
+                          style: const TextStyle(
+                            color: Colors.black,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
                 ),
-                _mapRoundIconButton(
-                  icon: Icons.people,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const FriendsScreen(),
-                      ),
-                    );
-                  },
-                ),
-                _mapRoundIconButton(
-                  icon: Icons.forum_outlined,
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => const DirectChatPickerScreen(),
-                      ),
-                    );
-                  },
-                ),
+                MarkerLayer(markers: userMarker),
               ],
             ),
-          ),
-          Positioned(
-            left: 32,
-            right: 32,
-            bottom: newEventBottom,
-            child: Center(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFFFF5F57), Color(0xFFFEBC2F)],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomLeft,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
+            Positioned(
+              top: topPadding + 5,
+              right: 10,
+              child: IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xCC161616),
+                  foregroundColor: const Color(0xFFDFE3EC),
+                  elevation: 0,
+                  padding: const EdgeInsets.all(10),
+                  iconSize: 22,
                 ),
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    shadowColor: Colors.transparent,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                icon: const Icon(Icons.person),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const ProfileScreen(),
                     ),
-                    minimumSize: const Size(48, 48),
-                    padding: const EdgeInsets.all(12),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: topPadding + 10 + 48,
+              right: 10,
+              child: IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xCC161616),
+                  foregroundColor: const Color(0xFFDFE3EC),
+                  elevation: 0,
+                  padding: const EdgeInsets.all(10),
+                  iconSize: 22,
+                ),
+                icon: const Icon(Icons.my_location),
+                onPressed: () {
+                  _initLocation(zoom: 16);
+                },
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: menuBottom,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _mapRoundIconButton(
+                    icon: Icons.list,
+                    onPressed: _openVisibleEventsSheet,
                   ),
-                  onPressed: () async {
-                    final navigator = Navigator.of(context);
-                    final initialCenter = _userPosition ?? _mapController.camera.center;
-                    final selected = await navigator.push<LatLng>(
-                      MaterialPageRoute(
-                        builder: (_) => CreateEventLocationScreen(initialCenter: initialCenter),
+                  _mapRoundIconButton(
+                    icon: Icons.chat,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const MyRoomsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _mapRoundIconButton(
+                    icon: Icons.people,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const FriendsScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                  _mapRoundIconButton(
+                    icon: Icons.forum_outlined,
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const DirectChatPickerScreen(),
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 32,
+              right: 32,
+              bottom: newEventBottom,
+              child: Center(
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFFFF5F57), Color(0xFFFEBC2F)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomLeft,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.transparent,
+                      shadowColor: Colors.transparent,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    );
-                    if (!mounted) return;
-                    if (selected == null) return;
+                      minimumSize: const Size(48, 48),
+                      padding: const EdgeInsets.all(12),
+                    ),
+                    onPressed: () async {
+                      final navigator = Navigator.of(context);
+                      final initialCenter =
+                          _userPosition ?? _mapController.camera.center;
+                      final selected = await navigator.push<LatLng>(
+                        MaterialPageRoute(
+                          builder: (_) => CreateEventLocationScreen(
+                            initialCenter: initialCenter,
+                          ),
+                        ),
+                      );
+                      if (!mounted) return;
+                      if (selected == null) return;
 
-                    final created = await navigator.push<Event>(
-                      MaterialPageRoute(
-                        builder: (_) => CreateEventDetailsScreen(position: selected),
-                      ),
-                    );
-                    if (!mounted) return;
-                    if (created == null) return;
+                      final created = await navigator.push<Event>(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CreateEventDetailsScreen(position: selected),
+                        ),
+                      );
+                      if (!mounted) return;
+                      if (created == null) return;
 
-                    await _addEvent(created);
-                  },
-                  child: const Icon(Icons.add, color: Colors.white),
+                      await _addEvent(created);
+                    },
+                    child: const Icon(Icons.add, color: Colors.white),
+                  ),
                 ),
               ),
             ),
-          ),
-         AnimatedOpacity(
-            opacity: _selectedEventPreview == null ? 0 : 1,
-            duration: const Duration(milliseconds: 180),
-            child: _selectedEventPreview == null
-                ? const SizedBox.shrink()
-                : Align(
-                    alignment: Alignment.bottomCenter,
-                    child: Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, previewCardBottom),
-                      child: Builder(
-                        builder: (context) {
-                          final event = _selectedEventPreview!;
-                          final remaining = event.endsAt == null
-                              ? null
-                              : event.endsAt!.difference(DateTime.now());
-                          String? remainingLabel;
-                          if (remaining != null) {
-                            if (remaining.inMinutes <= 0) {
-                              remainingLabel = 'завершилось';
-                            } else if (remaining.inHours < 1) {
-                              remainingLabel = 'осталось ${remaining.inMinutes} мин';
-                            } else if (remaining.inHours < 24) {
-                              remainingLabel = 'осталось ${remaining.inHours} ч';
-                            } else {
-                              final days = remaining.inDays;
-                              remainingLabel = 'осталось $days дн';
+            AnimatedOpacity(
+              opacity: _selectedEventPreview == null ? 0 : 1,
+              duration: const Duration(milliseconds: 180),
+              child: _selectedEventPreview == null
+                  ? const SizedBox.shrink()
+                  : Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          0,
+                          16,
+                          previewCardBottom,
+                        ),
+                        child: Builder(
+                          builder: (context) {
+                            final event = _selectedEventPreview!;
+                            final remaining = event.endsAt == null
+                                ? null
+                                : event.endsAt!.difference(DateTime.now());
+                            String? remainingLabel;
+                            if (remaining != null) {
+                              if (remaining.inMinutes <= 0) {
+                                remainingLabel = 'завершилось';
+                              } else if (remaining.inHours < 1) {
+                                remainingLabel =
+                                    'осталось ${remaining.inMinutes} мин';
+                              } else if (remaining.inHours < 24) {
+                                remainingLabel =
+                                    'осталось ${remaining.inHours} ч';
+                              } else {
+                                final days = remaining.inDays;
+                                remainingLabel = 'осталось $days дн';
+                              }
                             }
-                          }
 
-                          final participants = _participantsForEvent(event);
-                          final totalGoing = participants.length;
-                          final isGoing = _isCurrentUserGoing(event);
-                          final iconLabel =
-                              EventMarkerCatalog.categoryLabelForCodePoint(
-                            event.markerIconCodePoint,
-                          );
-                          final markerColor = Color(event.markerColorValue);
+                            final participants = _participantsForEvent(event);
+                            final totalGoing = participants.length;
+                            final isGoing = _isCurrentUserGoing(event);
+                            final iconLabel =
+                                EventMarkerCatalog.categoryLabelForCodePoint(
+                                  event.markerIconCodePoint,
+                                );
+                            final markerColor = Color(event.markerColorValue);
 
-                          return EventPreviewCard(
-                            event: event,
-                            previewLoading: _previewLoading,
-                            remainingLabel: remainingLabel,
-                            iconLabel: iconLabel,
-                            markerColor: markerColor,
-                            participants: participants,
-                            totalGoing: totalGoing,
-                            isGoing: isGoing,
-                            onRsvpToggle: (status) => _updateRsvpStatus(event, status),
-                            onOpenDetails: () {
-                              Navigator.of(context)
-                                  .push(
-                                    MaterialPageRoute(
-                                      builder: (_) => EventDetailsScreen(event: event),
-                                    ),
-                                  )
-                                  .then((_) => _refreshEventById(event.id));
-                            },
-                          );
-                        },
+                            return EventPreviewCard(
+                              event: event,
+                              previewLoading: _previewLoading,
+                              remainingLabel: remainingLabel,
+                              iconLabel: iconLabel,
+                              markerColor: markerColor,
+                              participants: participants,
+                              totalGoing: totalGoing,
+                              isGoing: isGoing,
+                              onRsvpToggle: (status) =>
+                                  _updateRsvpStatus(event, status),
+                              onOpenDetails: () {
+                                Navigator.of(context)
+                                    .push(
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            EventDetailsScreen(event: event),
+                                      ),
+                                    )
+                                    .then((_) => _refreshEventById(event.id));
+                              },
+                            );
+                          },
+                        ),
                       ),
                     ),
-                  ),
-          )
-        ],
+            ),
+          ],
+        ),
       ),
-      
     );
   }
 }
-
-

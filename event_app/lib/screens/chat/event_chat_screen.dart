@@ -44,7 +44,9 @@ class _EventChatScreenState extends State<EventChatScreen> {
         '/events/${widget.event.id}/messages',
         withAuth: true,
       );
-      final messages = list.map((e) => EventMessage.fromApi(e as Map<String, dynamic>)).toList();
+      final messages = list
+          .map((e) => EventMessage.fromApi(e as Map<String, dynamic>))
+          .toList();
       setState(() {
         _messages = messages;
         _loading = false;
@@ -56,8 +58,8 @@ class _EventChatScreenState extends State<EventChatScreen> {
         _error = e.statusCode == 403
             ? 'Вы не участвуете в этом событии'
             : e.statusCode == 401
-                ? 'Войдите в аккаунт'
-                : e.message;
+            ? 'Войдите в аккаунт'
+            : e.message;
         _messages = [];
         _loading = false;
       });
@@ -110,7 +112,9 @@ class _EventChatScreenState extends State<EventChatScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              e.statusCode == 403 ? 'Вы не участвуете в этом событии' : e.message,
+              e.statusCode == 403
+                  ? 'Вы не участвуете в этом событии'
+                  : e.message,
             ),
           ),
         );
@@ -119,9 +123,9 @@ class _EventChatScreenState extends State<EventChatScreen> {
     } catch (e) {
       setState(() => _sending = false);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
       _textController.text = text;
     }
@@ -132,7 +136,10 @@ class _EventChatScreenState extends State<EventChatScreen> {
     try {
       _socket = io.io(
         ApiClient.baseUrl,
-        io.OptionBuilder().setTransports(['websocket', 'polling']).enableAutoConnect().build(),
+        io.OptionBuilder()
+            .setTransports(['websocket', 'polling'])
+            .enableAutoConnect()
+            .build(),
       );
       _socket!.connect();
       _socket!.emit('joinEvent', widget.event.id);
@@ -172,78 +179,152 @@ class _EventChatScreenState extends State<EventChatScreen> {
   @override
   Widget build(BuildContext context) {
     final dateFormat = DateFormat('HH:mm');
+
     return Scaffold(
+      backgroundColor: const Color(0xFF161616),
       appBar: AppBar(
-        title: Text(widget.event.title),
+        title: Text(
+          widget.event.title,
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            fontSize: 18,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: const Color(0xFF161616),
+        elevation: 0,
+        centerTitle: false,
         actions: [
-          IconButton(
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => EventDetailsScreen(event: widget.event),
-                ),
-              );
-            },
-            icon: const Icon(Icons.info_outline),
-            tooltip: 'Подробности события',
+          Container(
+            width: 37,
+            height: 37,
+            margin: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(157, 0, 0, 0),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: const Icon(
+                Icons.info_outline,
+                color: Colors.white70,
+                size: 20,
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => EventDetailsScreen(event: widget.event),
+                  ),
+                );
+              },
+              tooltip: 'Подробности события',
+            ),
           ),
         ],
+        leading: Container(
+          width: 37,
+          height: 37,
+          margin: const EdgeInsets.only(left: 12),
+          decoration: BoxDecoration(
+            color: const Color.fromARGB(157, 0, 0, 0),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: IconButton(
+            padding: EdgeInsets.zero,
+            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ),
       ),
       body: Column(
         children: [
           if (_error != null)
-            Padding(
-              padding: const EdgeInsets.all(12),
+            Container(
+              margin: const EdgeInsets.all(12),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: const Color(0xFF141414),
+                borderRadius: BorderRadius.circular(12),
+              ),
               child: Text(
                 _error!,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Theme.of(context).colorScheme.error,
-                    ),
+                  color: Theme.of(context).colorScheme.error,
+                  fontFamily: 'Inter',
+                ),
+                textAlign: TextAlign.center,
               ),
             ),
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
                 : ListView.builder(
                     controller: _scrollController,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     itemCount: _messages.length,
                     itemBuilder: (context, index) {
                       final msg = _messages[index];
-                      final isMe = _myEmail != null && msg.userEmail == _myEmail;
+                      final isMe =
+                          _myEmail != null &&
+                          msg.userEmail == _myEmail; // Исправлено!
                       return Align(
-                        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+                        alignment: isMe
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
                           constraints: BoxConstraints(
                             maxWidth: MediaQuery.of(context).size.width * 0.8,
                           ),
                           decoration: BoxDecoration(
                             color: isMe
-                                ? Theme.of(context).colorScheme.primaryContainer
-                                : Theme.of(context).colorScheme.surfaceContainerHighest,
+                                ? const Color(0xFF2C2E36)
+                                : const Color(0xFF141414),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (!isMe && msg.userEmail != null)
+                              if (!isMe && msg.displayName != null)
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 4),
                                   child: Text(
-                                    msg.userEmail!,
-                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                          color: Theme.of(context).colorScheme.primary,
-                                        ),
+                                    msg.displayName!,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: Color(0xFF8FF5FF),
+                                    ),
                                   ),
                                 ),
-                              Text(msg.text),
-                              const SizedBox(height: 2),
+                              Text(
+                                msg.text,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
                               Text(
                                 dateFormat.format(msg.createdAt),
-                                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.grey),
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 10,
+                                  color: Colors.grey,
+                                ),
                               ),
                             ],
                           ),
@@ -253,17 +334,44 @@ class _EventChatScreenState extends State<EventChatScreen> {
                   ),
           ),
           SafeArea(
-            child: Padding(
+            child: Container(
               padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFF161616),
+                border: Border(
+                  top: BorderSide(
+                    color: Colors.white.withOpacity(0.1),
+                    width: 1,
+                  ),
+                ),
+              ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _textController,
-                      decoration: const InputDecoration(
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                      decoration: InputDecoration(
                         hintText: 'Сообщение...',
-                        border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        hintStyle: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          color: Colors.grey[600],
+                        ),
+                        filled: true,
+                        fillColor: const Color(0xFF141414),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(20),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
+                        ),
                       ),
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _sendMessage(),
@@ -271,16 +379,36 @@ class _EventChatScreenState extends State<EventChatScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  IconButton.filled(
-                    onPressed: _sending || _error != null ? null : _sendMessage,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    tooltip: 'Отправить',
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: _sending || _error != null
+                          ? Colors.grey[800]
+                          : const Color(0xFFFF5F57),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: _sending || _error != null
+                          ? null
+                          : _sendMessage,
+                      icon: _sending
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(
+                              Icons.send,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                      tooltip: 'Отправить',
+                    ),
                   ),
                 ],
               ),
@@ -291,4 +419,3 @@ class _EventChatScreenState extends State<EventChatScreen> {
     );
   }
 }
-

@@ -48,10 +48,10 @@ class _BirthDateFieldState extends State<_BirthDateField> {
         Text(
           'Дата рождения',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.white70,
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-              ),
+            color: Colors.white70,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 6),
         InkWell(
@@ -105,6 +105,7 @@ class _StyledTextField extends StatefulWidget {
     this.maxLines = 1,
     this.maxLength,
     this.labelTrailing,
+    this.statusIcon,
   });
 
   final String labelText;
@@ -114,6 +115,7 @@ class _StyledTextField extends StatefulWidget {
   final int maxLines;
   final int? maxLength;
   final Widget? labelTrailing;
+  final Widget? statusIcon;
 
   @override
   State<_StyledTextField> createState() => _StyledTextFieldState();
@@ -130,16 +132,28 @@ class _StyledTextFieldState extends State<_StyledTextField> {
 
   void _onFocusChange() {
     if (!_focusNode.hasFocus) return;
+
+    // Добавляем проверку на mounted
+    if (!mounted) return;
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Проверяем mounted и hasFocus перед выполнением
       if (!mounted || !_focusNode.hasFocus) return;
+
       final ctx = _focusNode.context;
       if (ctx == null) return;
-      Scrollable.ensureVisible(
-        ctx,
-        duration: const Duration(milliseconds: 280),
-        curve: Curves.easeOutCubic,
-        alignment: 0.2,
-      );
+
+      try {
+        Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeOutCubic,
+          alignment: 0.2,
+        );
+      } catch (e) {
+        // Игнорируем ошибки при сворачивании
+        debugPrint('Scroll error: $e');
+      }
     });
   }
 
@@ -152,8 +166,15 @@ class _StyledTextFieldState extends State<_StyledTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboardBottom = MediaQuery.viewInsetsOf(context).bottom;
-    final scrollPadBottom = keyboardBottom + 24;
+    // Добавляем try-catch для MediaQuery
+    double scrollPadBottom = 24;
+    try {
+      final keyboardBottom = MediaQuery.of(context).viewInsets.bottom;
+      scrollPadBottom = keyboardBottom + 24;
+    } catch (e) {
+      // Если ошибка, используем значение по умолчанию
+      scrollPadBottom = 24;
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -164,10 +185,10 @@ class _StyledTextFieldState extends State<_StyledTextField> {
             Text(
               widget.labelText,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: Colors.white70,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             if (widget.labelTrailing != null) widget.labelTrailing!,
           ],
@@ -179,19 +200,35 @@ class _StyledTextFieldState extends State<_StyledTextField> {
           controller: widget.controller,
           maxLines: widget.maxLines,
           maxLength: widget.maxLength,
-          // Мы рисуем свой счётчик справа от label, поэтому скрываем стандартный.
-          buildCounter: (context, {required currentLength, required isFocused, required maxLength}) {
-            return const SizedBox.shrink();
-          },
+          buildCounter:
+              (
+                context, {
+                required currentLength,
+                required isFocused,
+                required maxLength,
+              }) {
+                return const SizedBox.shrink();
+              },
           textAlign: TextAlign.start,
-          textAlignVertical:
-              widget.maxLines > 1 ? TextAlignVertical.top : TextAlignVertical.center,
+          textAlignVertical: widget.maxLines > 1
+              ? TextAlignVertical.top
+              : TextAlignVertical.center,
           scrollPadding: EdgeInsets.fromLTRB(16, 24, 16, scrollPadBottom),
           decoration: InputDecoration(
             hintText: widget.hintText,
             filled: true,
             fillColor: _fieldBg,
             hintStyle: const TextStyle(color: Colors.white54),
+            suffixIcon: widget.statusIcon != null
+                ? Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: widget.statusIcon,
+                  )
+                : null,
+            suffixIconConstraints: const BoxConstraints(
+              minWidth: 24,
+              minHeight: 24,
+            ),
             enabledBorder: OutlineInputBorder(
               borderSide: const BorderSide(color: _fieldBorder),
               borderRadius: BorderRadius.circular(10),
@@ -295,7 +332,6 @@ class _GenderDropdownFieldState extends State<_GenderDropdownField> {
             ),
             CompositedTransformFollower(
               link: _layerLink,
-              // Ниже поля на высоту + небольшой отступ.
               offset: Offset(0, _fieldHeight + 6),
               showWhenUnlinked: false,
               child: Material(
@@ -390,15 +426,15 @@ class _GenderDropdownFieldState extends State<_GenderDropdownField> {
                     ),
                   ),
                 ),
-                    AnimatedRotation(
-                      duration: const Duration(milliseconds: 180),
-                      curve: Curves.easeInOut,
-                      turns: _isOpen ? 0.5 : 0.0, // 180 degrees: вниз <-> вверх
-                      child: const Icon(
-                        Icons.keyboard_arrow_down,
-                        color: arrowColor,
-                      ),
-                    ),
+                AnimatedRotation(
+                  duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeInOut,
+                  turns: _isOpen ? 0.5 : 0.0,
+                  child: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: arrowColor,
+                  ),
+                ),
               ],
             ),
           ),
@@ -409,10 +445,7 @@ class _GenderDropdownFieldState extends State<_GenderDropdownField> {
 }
 
 class _MenuItem extends StatelessWidget {
-  const _MenuItem({
-    required this.text,
-    required this.onTap,
-  });
+  const _MenuItem({required this.text, required this.onTap});
 
   final String text;
   final VoidCallback onTap;
@@ -455,8 +488,11 @@ class ProfileEditSheetContent extends StatelessWidget {
     required this.onGenderChanged,
     required this.onAllowMessagesFromNonFriendsChanged,
     required this.onClose,
+    required this.onSave,
     required this.scrollController,
     required this.sheetPadding,
+    this.usernameStatusIcon,
+    this.isUsernameValid = true,
   });
 
   final String email;
@@ -478,8 +514,11 @@ class ProfileEditSheetContent extends StatelessWidget {
   final ValueChanged<String?> onGenderChanged;
   final ValueChanged<bool> onAllowMessagesFromNonFriendsChanged;
   final VoidCallback onClose;
+  final VoidCallback onSave;
   final ScrollController scrollController;
   final EdgeInsets sheetPadding;
+  final Widget? usernameStatusIcon;
+  final bool isUsernameValid;
 
   @override
   Widget build(BuildContext context) {
@@ -490,239 +529,282 @@ class ProfileEditSheetContent extends StatelessWidget {
     final statusColor = savingProfile
         ? Colors.grey
         : (lastSaveMessage == null
-            ? Colors.grey
-            : (lastSaveOk ? Colors.green : Theme.of(context).colorScheme.error));
+              ? Colors.grey
+              : (lastSaveOk
+                    ? Colors.green
+                    : Theme.of(context).colorScheme.error));
 
-    return ListView(
-      controller: scrollController,
-      padding: sheetPadding,
-      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-      children: [
-        Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Stack(
-                alignment: Alignment.bottomRight,
-                clipBehavior: Clip.none,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: InkWell(
-                      onTap: savingProfile ? null : onPickAvatar,
+    return GestureDetector(
+      onTap: () {
+        // Закрываем клавиатуру при тапе на пустое место
+        FocusScope.of(context).unfocus();
+      },
+      child: ListView(
+        controller: scrollController,
+        padding: sheetPadding,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        children: [
+          Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Stack(
+                  alignment: Alignment.bottomRight,
+                  clipBehavior: Clip.none,
+                  children: [
+                    ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                      child: SizedBox(
-                        width: 96,
-                        height: 96,
-                        child: fullAvatarUrl == null
-                            ? Container(
-                                color: placeholderBg,
-                                alignment: Alignment.center,
-                                child: const Icon(Icons.person, color: Colors.white),
-                              )
-                            : Image.network(
-                                fullAvatarUrl,
-                                fit: BoxFit.cover,
-                              ),
-                      ),
-                    ),
-                  ),
-                  Positioned(
-                    right: -6,
-                    top: -6,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(14),
-                      onTap: savingProfile ? null : () { onPickAvatar(); },
-                      child: Container(
-                        width: 38,
-                        height: 38,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        alignment: Alignment.center,
-                        child: const Icon(
-                          Icons.photo,
-                          size: 18,
-                          color: Colors.black,
+                      child: InkWell(
+                        onTap: savingProfile ? null : onPickAvatar,
+                        borderRadius: BorderRadius.circular(18),
+                        child: SizedBox(
+                          width: 96,
+                          height: 96,
+                          child: fullAvatarUrl == null
+                              ? Container(
+                                  color: placeholderBg,
+                                  alignment: Alignment.center,
+                                  child: const Icon(
+                                    Icons.person,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Image.network(fullAvatarUrl, fit: BoxFit.cover),
                         ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Редактирование профиля',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                savingProfile
-                    ? 'Сохраняю...'
-                    : (lastSaveMessage ?? 'Изменения сохранятся при закрытии'),
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: statusColor),
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: savingProfile
+                            ? null
+                            : () {
+                                onPickAvatar();
+                              },
+                        child: Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          alignment: Alignment.center,
+                          child: const Icon(
+                            Icons.photo,
+                            size: 18,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'Редактирование профиля',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  savingProfile
+                      ? 'Сохраняю...'
+                      : (lastSaveMessage ??
+                            'Нажмите Сохранить для сохранения изменений'),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: statusColor),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _StyledTextField(
+                labelText: 'Никнейм',
+                controller: usernameController,
+                hintText: 'ivan_123',
+                maxLength: usernameMaxLen,
+                statusIcon: usernameStatusIcon,
+                labelTrailing: ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: usernameController,
+                  builder: (context, value, _) {
+                    final len = value.text.trim().length;
+                    return Text(
+                      '$len/$usernameMaxLen',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    );
+                  },
+                ),
               ),
             ],
           ),
-        ),
-        const SizedBox(height: 16),
-        _StyledTextField(
-          labelText: 'Никнейм',
-          controller: usernameController,
-          hintText: 'ivan_123',
-          maxLength: usernameMaxLen,
-          labelTrailing: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: usernameController,
-            builder: (context, value, _) {
-              final len = value.text.trim().length;
-              return Text(
-                '$len/$usernameMaxLen',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-              );
-            },
+          const SizedBox(height: 12),
+          _StyledTextField(
+            labelText: 'Имя',
+            controller: displayNameController,
+            hintText: 'Как Вас зовут?',
           ),
-        ),
-        const SizedBox(height: 12),
-        _StyledTextField(
-          labelText: 'Имя',
-          controller: displayNameController,
-          hintText: 'Как Вас зовут?',
-        ),
-        const SizedBox(height: 12),
-        _StyledTextField(
-          labelText: 'О себе',
-          controller: bioController,
-          maxLines: 4,
-          hintText: 'Расскажите немного о себе',
-          maxLength: bioMaxLen,
-          labelTrailing: ValueListenableBuilder<TextEditingValue>(
-            valueListenable: bioController,
-            builder: (context, value, _) {
-              final len = value.text.length;
-              return Text(
-                '$len/$bioMaxLen',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-              );
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: _BirthDateField(
-                birthDate: birthDate,
-                onPickBirthDate: onPickBirthDate,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Пол',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Colors.white70,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: 6),
-                  _GenderDropdownField(
-                    gender: gender,
-                    enabled: !savingProfile,
-                    onGenderChanged: onGenderChanged,
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Email',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          const SizedBox(height: 12),
+          _StyledTextField(
+            labelText: 'О себе',
+            controller: bioController,
+            maxLines: 4,
+            hintText: 'Расскажите немного о себе',
+            maxLength: bioMaxLen,
+            labelTrailing: ValueListenableBuilder<TextEditingValue>(
+              valueListenable: bioController,
+              builder: (context, value, _) {
+                final len = value.text.length;
+                return Text(
+                  '$len/$bioMaxLen',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: Colors.white70,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w500,
                   ),
+                );
+              },
             ),
-            const SizedBox(height: 6),
-            TextField(
-              enabled: false,
-              decoration: InputDecoration(
-                hintText: email.isEmpty ? 'email@example.com' : email,
-                filled: true,
-                fillColor: _fieldBg,
-                hintStyle: const TextStyle(color: Colors.white54),
-                enabledBorder: OutlineInputBorder(
-                  borderSide: const BorderSide(color: _fieldBorder),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                border: OutlineInputBorder(
-                  borderSide: const BorderSide(color: _fieldBorder),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 14,
-                ),
-              ),
-              style: const TextStyle(color: Colors.white54),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
-        SwitchListTile(
-          contentPadding: EdgeInsets.zero,
-          title: const Text(
-            'Разрешать сообщения не друзьям',
-            style: TextStyle(color: Colors.white),
           ),
-          value: allowMessagesFromNonFriends,
-          activeColor: Colors.white,
-          inactiveThumbColor: Colors.white54,
-          inactiveTrackColor: const Color(0xFF222222),
-          onChanged: savingProfile ? null : onAllowMessagesFromNonFriendsChanged,
-        ),
-        const SizedBox(height: 16),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FilledButton(
-              onPressed: onClose,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _BirthDateField(
+                  birthDate: birthDate,
+                  onPickBirthDate: onPickBirthDate,
                 ),
-                fixedSize: const Size(25, 35),
-                padding: EdgeInsets.zero,
               ),
-              child: const Icon(Icons.close, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Пол',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.white70,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _GenderDropdownField(
+                      gender: gender,
+                      enabled: !savingProfile,
+                      onGenderChanged: onGenderChanged,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Email',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Colors.white70,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              TextField(
+                enabled: false,
+                decoration: InputDecoration(
+                  hintText: email.isEmpty ? 'email@example.com' : email,
+                  filled: true,
+                  fillColor: _fieldBg,
+                  hintStyle: const TextStyle(color: Colors.white54),
+                  enabledBorder: OutlineInputBorder(
+                    borderSide: const BorderSide(color: _fieldBorder),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  border: OutlineInputBorder(
+                    borderSide: const BorderSide(color: _fieldBorder),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 14,
+                  ),
+                ),
+                style: const TextStyle(color: Colors.white54),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text(
+              'Разрешать сообщения не друзьям',
+              style: TextStyle(color: Colors.white),
             ),
-          ],
-        ),
-        const SizedBox(height: 16),
-      ],
+            value: allowMessagesFromNonFriends,
+            activeColor: Colors.white,
+            inactiveThumbColor: Colors.white54,
+            inactiveTrackColor: const Color(0xFF222222),
+            onChanged: savingProfile
+                ? null
+                : onAllowMessagesFromNonFriendsChanged,
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onClose,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: const BorderSide(color: Colors.white24),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 24,
+                    ),
+                  ),
+                  child: const Text('Отмена'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton(
+                  onPressed: onSave,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 24,
+                    ),
+                  ),
+                  child: const Text('Сохранить'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
     );
   }
 }
-
