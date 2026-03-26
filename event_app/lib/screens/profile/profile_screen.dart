@@ -1,23 +1,18 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:image_picker/image_picker.dart';
 
 import '../../services/api_client.dart';
 import '../../utils/formatters.dart';
 import '../../widgets/profile/stat_badge.dart';
 import '../../widgets/profile/stat_card.dart';
-import '../../widgets/profile/blocked_card.dart';
-import '../../widgets/profile/relationship_buttons.dart';
 import '../auth/auth_screen.dart';
 import 'profile_models.dart';
 import 'profile_qr_screen.dart';
 import 'profile_repository.dart';
 import 'profile_social_models.dart';
 import 'widgets/achievement_section.dart';
-import 'widgets/birth_date_numeric_sheet.dart';
 import 'profile_cover_gradient.dart';
 import 'widgets/profile_avatar_header.dart';
 import 'widgets/profile_cover_edit_sheet.dart';
@@ -146,8 +141,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _profileProvider?.refresh();
       _statsProvider?.refresh();
       _achievementsProvider?.refresh();
-
-      // Не вызываем setState, провайдеры сами обновят UI
     }
   }
 
@@ -259,7 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildOtherProfile() {
-    return FutureBuilder<void>(
+    return FutureBuilder(
       future: Future.wait([
         _otherUserFuture,
         _otherStatsFuture,
@@ -285,7 +278,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: _loadOtherProfileData,
+                  onPressed: () {
+                    setState(() {
+                      _loadOtherProfileData();
+                    });
+                  },
                   child: const Text('Повторить'),
                 ),
               ],
@@ -293,10 +290,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
 
-        final profile = _otherUserFuture as ProfileMe?;
-        final stats = _otherStatsFuture as ProfileStats;
-        final achievements =
-            _otherAchievementsFuture as List<ProfileAchievement>;
+        final results = snapshot.data as List<dynamic>;
+
+        // Правильные индексы:
+        // 0 - _otherUserFuture
+        // 1 - _otherStatsFuture
+        // 2 - _relationshipFuture
+        // 3 - _blockStatusFuture
+        // 4 - _otherAchievementsFuture
+
+        final profile = results[0] as ProfileMe?;
+        final stats = results[1] as ProfileStats;
+        final achievements = results[4] as List<ProfileAchievement>;
 
         if (profile == null) {
           return const Center(
@@ -499,12 +504,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ? Colors.white
                   : Colors.grey.shade500,
             ),
-          ),
-          const SizedBox(height: 16),
-          const Divider(
-            color: Color.fromARGB(144, 44, 44, 44),
-            height: 1,
-            thickness: 1,
           ),
         ],
       ),

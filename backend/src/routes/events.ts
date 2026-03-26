@@ -306,7 +306,7 @@ router.get('/:id', async (req, res) => {
       FROM event_rsvp r
       JOIN users u ON u.id = r.user_id
       WHERE r.event_id = $1 AND r.status = 1
-      ORDER BY r.updated_at ASC
+      ORDER BY r.updated_at DESC
       `,
       [id],
     );

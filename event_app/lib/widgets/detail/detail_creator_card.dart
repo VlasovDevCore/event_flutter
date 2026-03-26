@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class DetailCreatorCard extends StatelessWidget {
   final String? creatorId;
@@ -28,15 +29,48 @@ class DetailCreatorCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            CircleAvatar(
-              radius: 24,
-              backgroundColor: Colors.grey[800],
-              backgroundImage: creatorAvatarUrl != null
-                  ? NetworkImage(creatorAvatarUrl!)
-                  : null,
-              child: creatorAvatarUrl == null
-                  ? const Icon(Icons.person, color: Colors.white54, size: 28)
-                  : null,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: creatorAvatarUrl != null && creatorAvatarUrl!.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: creatorAvatarUrl!,
+                      width: 48,
+                      height: 48,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        width: 48,
+                        height: 48,
+                        color: Colors.grey[800],
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white54,
+                          size: 28,
+                        ),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        width: 48,
+                        height: 48,
+                        color: Colors.grey[800],
+                        child: const Icon(
+                          Icons.person,
+                          color: Colors.white54,
+                          size: 28,
+                        ),
+                      ),
+                    )
+                  : Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[800],
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      child: const Icon(
+                        Icons.person,
+                        color: Colors.white54,
+                        size: 28,
+                      ),
+                    ),
             ),
             const SizedBox(width: 12),
             Expanded(

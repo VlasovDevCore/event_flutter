@@ -6,7 +6,6 @@ import 'package:image_picker/image_picker.dart';
 import '../../services/api_client.dart';
 import 'profile_edit_logic.dart';
 import 'profile_models.dart';
-import 'profile_repository.dart';
 import 'widgets/birth_date_numeric_sheet.dart';
 
 // Функция для формирования URL аватара
@@ -285,8 +284,6 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   @override
   Widget build(BuildContext context) {
     final fullAvatarUrl = resolveAvatarUrl(_avatarUrl);
-    const fieldBg = Color(0xFF1F1F1F);
-    const fieldBorder = Color(0xFF222222);
 
     return Scaffold(
       backgroundColor: const Color(0xFF161616),
