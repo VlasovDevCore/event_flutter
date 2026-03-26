@@ -12,6 +12,8 @@ import '../events/create_event_location_screen.dart';
 import '../home/widgets/event_preview_participants_row.dart';
 import '../home/widgets/preview_participant.dart';
 
+import '../../utils/icon_helper.dart';
+
 /// Комнаты: вкладка «Участвую» (RSVP) и «Создал» (мои события).
 /// Тап по строке — детальная информация; иконка чата — чат.
 class MyRoomsScreen extends StatefulWidget {
@@ -216,10 +218,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
     final color = Color(event.markerColorValue);
     final gradientStart = Color.lerp(color, Colors.white, 0.22) ?? color;
     final gradientEnd = Color.lerp(color, Colors.black, 0.22) ?? color;
-    final icon = IconData(
-      event.markerIconCodePoint,
-      fontFamily: 'MaterialIcons',
-    );
+    final icon = IconConstants.getIcon(event.markerIconCodePoint);
     final isEnded =
         event.endsAt != null && event.endsAt!.isBefore(DateTime.now());
     final date = event.endsAt ?? event.createdAt;

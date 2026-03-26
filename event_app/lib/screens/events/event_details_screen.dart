@@ -1,23 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../config/event_marker_catalog.dart';
 import '../../models/event.dart';
 import '../../services/api_client.dart';
 import '../chat/event_chat_screen.dart';
-// import '../profile/profile_avatar.dart';
 import '../profile/profile_screen.dart';
-import '../../widgets/detail/detail_attendees_list.dart';
 import '../../widgets/detail/detail_chat_button.dart';
-import '../../widgets/detail/detail_coordinates.dart';
-import '../../widgets/detail/detail_creator_card.dart';
 import '../../widgets/detail/detail_description.dart';
 import '../../widgets/detail/detail_edit_payload.dart';
 import '../../widgets/detail/detail_edit_sheet.dart';
 import '../../widgets/detail/detail_event_header.dart';
-import '../../widgets/detail/detail_rsvp_button.dart';
+import '../../widgets/detail/detail_creator_card.dart';
+import '../../widgets/detail/detail_attendees_section.dart';
+import '../../widgets/detail/detail_rsvp_section.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({super.key, required this.event});
@@ -35,8 +32,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   String? _error;
 
   static const Color _bg = Color(0xFF161616);
-  static const Color _appBarBg = Color(0xCC161616);
-  static const Color _text = Color(0xFFDFE3EC);
 
   void _openProfileById(String userId) {
     final rawMyId = Hive.box('authBox').get('userId');
@@ -82,29 +77,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     return byId || byEmail;
   }
 
-  String _creatorLabel(Event event) {
-    if (event.creatorName != null && event.creatorName!.trim().isNotEmpty) {
-      return event.creatorName!.trim();
-    }
-    if (event.creatorEmail != null && event.creatorEmail!.trim().isNotEmpty) {
-      return event.creatorEmail!.trim();
-    }
-    if (event.creatorId != null && event.creatorId!.trim().isNotEmpty) {
-      return 'id: ${event.creatorId!.trim()}';
-    }
-    return 'не указан';
-  }
-
   Future<void> _openYandexMaps() async {
     final event = _event ?? widget.event;
     final lat = event.lat;
     final lon = event.lon;
 
-    // Яндекс.Карты в веб-версии
     final url = Uri.parse('https://yandex.ru/maps/?pt=$lon,$lat&z=17&l=map');
 
     try {
-      // Открываем в системном браузере
       await launchUrl(url, mode: LaunchMode.platformDefault);
     } catch (e) {
       if (mounted) {
@@ -323,6 +303,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
       final notGoing = parseEmails(notGoingRaw);
       final goingProfiles = parseProfiles(goingRaw);
       final notGoingProfiles = parseProfiles(notGoingRaw);
+
       setState(() {
         final base = _event ?? widget.event;
         _event = Event(
@@ -337,12 +318,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           rsvpStatus: status,
           goingUsers: going,
           notGoingUsers: notGoing,
-          goingUserProfiles: goingProfiles.isNotEmpty
-              ? goingProfiles
-              : base.goingUserProfiles,
-          notGoingUserProfiles: notGoingProfiles.isNotEmpty
-              ? notGoingProfiles
-              : base.notGoingUserProfiles,
+          goingUserProfiles: goingProfiles,
+          notGoingUserProfiles: notGoingProfiles,
           endsAt: base.endsAt,
           creatorId: base.creatorId,
           creatorEmail: base.creatorEmail,
@@ -373,7 +350,6 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final event = _event ?? widget.event;
     final me = _currentUserEmail();
     final goingSelected = me != null && event.goingUsers.contains(me);
-    final goingCount = event.goingUsers.length;
 
     // Ищем профиль создателя
     final creatorProfiles = <EventUserProfile>[
@@ -412,132 +388,215 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
 
     return Scaffold(
       backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _appBarBg,
-        foregroundColor: _text,
-        surfaceTintColor: Colors.transparent,
-        title: const Text(
-          'Подробности события',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w700,
-            fontSize: 18,
-          ),
-        ),
-        actions: [
-          if (_isCreator(event))
-            IconButton(
-              onPressed: _savingEdit ? null : () => _openEditSheet(event),
-              icon: _savingEdit
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.edit_outlined),
-              tooltip: 'Редактировать',
-            ),
-        ],
-      ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (_error != null) ...[
-                    Text(
-                      _error!,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFFFF5F57),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+      body: Stack(
+        children: [
+          _buildBackgroundGradient(),
+          SafeArea(
+            child: _loading
+                ? const Center(
+                    child: CircularProgressIndicator(color: Colors.white),
+                  )
+                : CustomScrollView(
+                    slivers: [
+                      // Кастомный заголовок
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                          child: Row(
+                            children: [
+                              _buildBackButton(context),
+                              const SizedBox(width: 12),
+                              const Expanded(
+                                child: Text(
+                                  'Подробности',
+                                  style: TextStyle(
+                                    fontFamily: 'Inter',
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                              if (_isCreator(event)) _buildEditButton(event),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  DetailEventHeader(
-                    title: event.title,
-                    createdAt: event.createdAt,
-                    endsAt: event.endsAt,
-                  ),
-                  const SizedBox(height: 8),
-                  DetailCreatorCard(
-                    creatorId: creatorId,
-                    creatorTitle: creatorTitle,
-                    creatorNickname: creatorNickname,
-                    creatorAvatarUrl: creatorResolvedAvatar,
-                    onTap: (creatorId != null && creatorId.isNotEmpty)
-                        ? () => _openProfileById(creatorId)
-                        : null,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Придут: $goingCount',
-                    style: const TextStyle(
-                      fontFamily: 'Inter',
-                      color: _text,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      DetailRsvpButton(
-                        isGoing: goingSelected,
-                        onPressed: () => _setRsvp(goingSelected ? -1 : 1),
+                      // Контент
+                      SliverPadding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        sliver: SliverList(
+                          delegate: SliverChildListDelegate([
+                            if (_error != null) ...[
+                              Text(
+                                _error!,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: Color(0xFFFF5F57),
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                            // Заголовок и даты
+                            DetailEventHeader(
+                              title: event.title,
+                              createdAt: event.createdAt,
+                              endsAt: event.endsAt,
+                            ),
+                            const SizedBox(height: 16),
+                            // Карточка создателя
+                            DetailCreatorCard(
+                              creatorId: creatorId,
+                              creatorTitle: creatorTitle,
+                              creatorNickname: creatorNickname,
+                              creatorAvatarUrl: creatorResolvedAvatar,
+                              onTap: (creatorId != null && creatorId.isNotEmpty)
+                                  ? () => _openProfileById(creatorId)
+                                  : null,
+                            ),
+                            const SizedBox(height: 26),
+                            // Секция участников
+                            DetailAttendeesSection(
+                              event: event,
+                              currentUserEmail: me,
+                              onProfileTap: _openProfileById,
+                            ),
+                            const SizedBox(height: 10),
+                            // Кнопки RSVP
+                            DetailRsvpSection(
+                              isGoing: goingSelected,
+                              onPressed: () => _setRsvp(goingSelected ? -1 : 1),
+                            ),
+                            const SizedBox(height: 10),
+                            // Описание
+                            DetailDescription(description: event.description),
+                            const SizedBox(height: 20),
+                            // Кнопки чата и карты
+                            _buildActionButtons(event),
+                            const SizedBox(height: 24),
+                          ]),
+                        ),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 16),
-                  DetailAttendeesList(
-                    goingUsers: event.goingUsers,
-                    goingUserProfiles: event.goingUserProfiles,
-                    currentUserEmail: me,
-                    onProfileTap: _openProfileById,
-                  ),
-                  const SizedBox(height: 16),
-                  DetailDescription(description: event.description),
-                  // const SizedBox(height: 24),
-                  // DetailCoordinates(lat: event.lat, lon: event.lon),
-                  const SizedBox(height: 20),
-                  DetailChatButton(
-                    onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => EventChatScreen(event: event),
-                        ),
-                      );
-                    },
-                    onMapPressed: _openYandexMaps, // Добавьте эту строку
-                  ),
-                ],
-              ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackgroundGradient() {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topLeft,
+            radius: 0.55,
+            colors: [
+              const Color.fromARGB(197, 29, 29, 29),
+              const Color(0xFF161616),
+            ],
+            stops: const [0.1, 4.9],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBackButton(BuildContext context) {
+    return Tooltip(
+      message: MaterialLocalizations.of(context).backButtonTooltip,
+      child: Container(
+        width: 37,
+        height: 37,
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(157, 0, 0, 0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).pop(),
+            splashColor: const Color.fromARGB(157, 0, 0, 0),
+            highlightColor: const Color.fromARGB(157, 0, 0, 0),
+            child: const Center(
+              child: Icon(Icons.arrow_back, color: Colors.white, size: 18),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditButton(Event event) {
+    return Container(
+      width: 37,
+      height: 37,
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(157, 0, 0, 0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _savingEdit ? null : () => _openEditSheet(event),
+          splashColor: const Color.fromARGB(157, 0, 0, 0),
+          highlightColor: const Color.fromARGB(157, 0, 0, 0),
+          child: Center(
+            child: _savingEdit
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Icon(
+                    Icons.edit_outlined,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButtons(Event event) {
+    return Row(
+      children: [
+        Expanded(
+          child: DetailChatButton(
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => EventChatScreen(event: event),
+                ),
+              );
+            },
+            onMapPressed: _openYandexMaps,
+          ),
+        ),
+      ],
     );
   }
 
   String? _resolveAvatarUrl(String? avatarUrl) {
     if (avatarUrl == null || avatarUrl.isEmpty) return null;
-
-    // Если URL уже полный (http/https)
     if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
       return avatarUrl;
     }
-
-    // Если путь начинается с /uploads, добавляем базовый URL из ApiClient
     if (avatarUrl.startsWith('/uploads')) {
       return '${ApiClient.baseUrl}$avatarUrl';
     }
-
-    // Если путь начинается с file://, это локальный файл
     if (avatarUrl.startsWith('file://')) {
       return avatarUrl;
     }
-
     return null;
   }
 }

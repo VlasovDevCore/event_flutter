@@ -36,11 +36,7 @@ class EventMarkerWidget extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
           ),
           alignment: Alignment.center,
-          child: Icon(
-            icon,
-            color: Colors.white,
-            size: iconSize,
-          ),
+          child: Icon(icon, color: Colors.white, size: iconSize),
         ),
         if (showPinTail)
           Container(
@@ -55,4 +51,3 @@ class EventMarkerWidget extends StatelessWidget {
     );
   }
 }
-

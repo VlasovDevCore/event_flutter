@@ -27,6 +27,45 @@ class _AuthScreenState extends State<AuthScreen> {
     super.dispose();
   }
 
+  // Новый метод для загрузки полного профиля пользователя
+  Future<void> _loadFullUserProfile() async {
+    try {
+      final response = await ApiClient.instance.get(
+        '/users/me',
+        withAuth: true,
+      );
+
+      final authBox = Hive.box('authBox');
+
+      // Сохраняем все поля профиля
+      await authBox.put('displayName', response['displayName'] as String?);
+      await authBox.put('bio', response['bio'] as String?);
+      await authBox.put('avatarUrl', response['avatarUrl'] as String?);
+      await authBox.put('birthDate', response['birthDate'] as String?);
+      await authBox.put('gender', response['gender'] as String?);
+      await authBox.put(
+        'allowMessagesFromNonFriends',
+        response['allowMessagesFromNonFriends'] ?? true,
+      );
+
+      // Сохраняем градиент обложки, если есть
+      if (response['coverGradientColors'] != null) {
+        await authBox.put(
+          'coverGradientColors',
+          response['coverGradientColors'],
+        );
+      }
+
+      print(
+        'Profile loaded successfully: displayName=${response['displayName']}, avatarUrl=${response['avatarUrl']}',
+      );
+    } catch (e) {
+      print('Error loading full profile: $e');
+      // Не показываем ошибку пользователю, так как вход уже выполнен успешно
+      // Просто логируем
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final email = _emailController.text.trim();
@@ -53,6 +92,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final user = response['user'] as Map<String, dynamic>;
       final token = response['token'] as String;
 
+      // Сохраняем базовые данные
       await authBox.put('userId', user['id'] as String);
       await authBox.put('email', user['email'] as String);
       await authBox.put('username', user['username'] as String?);
@@ -64,20 +104,34 @@ class _AuthScreenState extends State<AuthScreen> {
       await authBox.put('token', token);
       await authBox.put('isLoggedIn', true);
 
+      // Если при регистрации пришли дополнительные данные, сохраняем их
+      if (user['displayName'] != null) {
+        await authBox.put('displayName', user['displayName']);
+      }
+      if (user['avatarUrl'] != null) {
+        await authBox.put('avatarUrl', user['avatarUrl']);
+      }
+      if (user['bio'] != null) {
+        await authBox.put('bio', user['bio']);
+      }
+
+      // Загружаем полный профиль с сервера
+      await _loadFullUserProfile();
+
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Ошибка сети')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Ошибка сети')));
     } finally {
       if (mounted) {
         setState(() {
@@ -147,7 +201,9 @@ class _AuthScreenState extends State<AuthScreen> {
                                 if (v.isEmpty) return 'Введите логин';
                                 if (v.length < 3) return 'Минимум 3 символа';
                                 if (v.length > 24) return 'Максимум 24 символа';
-                                final ok = RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(v);
+                                final ok = RegExp(
+                                  r'^[a-zA-Z0-9_]+$',
+                                ).hasMatch(v);
                                 if (!ok) return 'Только латиница, цифры и _';
                                 return null;
                               },
@@ -216,4 +272,3 @@ class _AuthScreenState extends State<AuthScreen> {
     );
   }
 }
-

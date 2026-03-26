@@ -4,6 +4,159 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Тип для новости
+interface NewsItem {
+  id: string;
+  title: string;
+  description: string;
+  image_url: string | null;
+  created_at: Date;
+  view_count: number;
+  is_viewed: boolean;
+}
+
+// Получить список новостей с отметкой о просмотре
+router.get('/news', authMiddleware, async (req: AuthRequest, res) => {
+  const client = await pool.connect();
+  try {
+    const userId = req.user?.id;
+    
+    const result = await client.query(
+      `
+      SELECT 
+        n.id, 
+        n.title, 
+        n.description, 
+        n.image_url, 
+        n.created_at,
+        COUNT(v.user_id) as view_count,
+        CASE WHEN v2.user_id IS NOT NULL THEN true ELSE false END as is_viewed
+      FROM news n
+      LEFT JOIN viewed_news v ON v.news_id = n.id
+      LEFT JOIN viewed_news v2 ON v2.news_id = n.id AND v2.user_id = $1
+      WHERE n.is_published = true
+      GROUP BY n.id, v2.user_id
+      ORDER BY n.created_at DESC
+      LIMIT 50
+      `,
+      [userId || null]
+    );
+    
+    const newsMap: Record<string, any> = {};
+    result.rows.forEach((news) => {
+      newsMap[news.id] = {
+        id: news.id,
+        title: news.title,
+        description: news.description,
+        image_url: news.image_url,
+        created_at: news.created_at,
+        view_count: parseInt(news.view_count),
+        is_viewed: news.is_viewed
+      };
+    });
+    
+    return res.json(newsMap);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Получить детальную новость по ID
+router.get('/news/:id', authMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  const client = await pool.connect();
+  
+  try {
+    // Получаем новость с количеством просмотров
+    const result = await client.query(
+      `
+      SELECT 
+        n.id, 
+        n.title, 
+        n.description, 
+        n.image_url, 
+        n.created_at,
+        COUNT(v.user_id) as view_count,
+        u.display_name as author_name,
+        u.email as author_email
+      FROM news n
+      LEFT JOIN viewed_news v ON v.news_id = n.id
+      LEFT JOIN users u ON u.id = n.created_by
+      WHERE n.id = $1 AND n.is_published = true
+      GROUP BY n.id, u.display_name, u.email
+      `,
+      [id]
+    );
+    
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: 'News not found' });
+    }
+    
+    // Отмечаем просмотр текущим пользователем
+    if (userId) {
+      await client.query(
+        `INSERT INTO viewed_news (user_id, news_id) 
+         VALUES ($1, $2) 
+         ON CONFLICT (user_id, news_id) DO NOTHING`,
+        [userId, id]
+      );
+    }
+    
+    const news = result.rows[0];
+    news.view_count = parseInt(news.view_count);
+    
+    return res.json(news);
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// В маршруте POST /news/:id/view
+router.post('/news/:id/view', authMiddleware, async (req: AuthRequest, res) => {
+  const { id } = req.params;
+  const userId = req.user?.id;
+  
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  
+  const client = await pool.connect();
+  try {
+    // Добавляем запись о просмотре
+    await client.query(
+      `INSERT INTO viewed_news (user_id, news_id) 
+       VALUES ($1, $2) 
+       ON CONFLICT (user_id, news_id) DO NOTHING`,
+      [userId, id]
+    );
+    
+    // Получаем общее количество просмотров
+    const countResult = await client.query(
+      'SELECT COUNT(*) as total FROM viewed_news WHERE news_id = $1',
+      [id]
+    );
+    
+    const totalViews = parseInt(countResult.rows[0].total);
+    
+    return res.json({ 
+      success: true,
+      view_count: totalViews
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 // Список событий в bbox (для карты)
 router.get('/', async (req, res) => {
   const bbox = (req.query.bbox as string | undefined)?.split(',').map(Number);

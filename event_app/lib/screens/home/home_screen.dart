@@ -18,8 +18,11 @@ import '../events/create_event_location_screen.dart';
 import '../events/event_details_screen.dart';
 import '../friends/friends_screen.dart';
 import '../profile/profile_screen.dart';
+import '../profile/profile_repository.dart';
+import '../profile/profile_models.dart';
 import '../rooms/my_rooms_screen.dart';
 import '../chat/direct_chat_picker_screen.dart';
+import '../news/news_screen.dart';
 
 import 'widgets/event_preview_card.dart';
 import 'widgets/preview_participant.dart';
@@ -43,6 +46,7 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _backPressedRecently = false;
   Timer? _visibleEventsDebounce;
   Timer? _geoMoveTimer;
+  bool _isLoadingProfile = false;
 
   String? _currentUserEmail() {
     final authBox = Hive.box('authBox');
@@ -93,8 +97,36 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    _loadUserProfile(); // Загружаем профиль при старте
     _loadEventsFromApi();
     _initLocation(zoom: 13, immediateZoom: false);
+  }
+
+  // Новый метод для загрузки профиля пользователя
+  Future<void> _loadUserProfile() async {
+    if (_isLoadingProfile) return;
+    _isLoadingProfile = true;
+
+    try {
+      print('🔄 Загружаем профиль пользователя в HomeScreen');
+      final response = await ApiClient.instance.get(
+        '/users/me',
+        withAuth: true,
+      );
+
+      final me = ProfileMe.fromApi(response);
+      await ProfileRepository.writeMeToHive(me);
+
+      print(
+        '✅ Профиль загружен: displayName=${me.displayName}, avatarUrl=${me.avatarUrl}',
+      );
+    } catch (e) {
+      print('❌ Ошибка загрузки профиля: $e');
+    } finally {
+      if (mounted) {
+        _isLoadingProfile = false;
+      }
+    }
   }
 
   void _animateMapTo(
@@ -768,6 +800,28 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.my_location),
                 onPressed: () {
                   _initLocation(zoom: 16);
+                },
+              ),
+            ),
+            Positioned(
+              top: topPadding + 10 + 48 + 56,
+              right: 10,
+              child: IconButton(
+                style: IconButton.styleFrom(
+                  backgroundColor: const Color(0xCC161616),
+                  foregroundColor: const Color(0xFFDFE3EC),
+                  elevation: 0,
+                  padding: const EdgeInsets.all(10),
+                  iconSize: 22,
+                ),
+                icon: const Icon(Icons.featured_play_list),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          const NewsScreen(), // Замените NewsScreen на ваш класс экрана новостей
+                    ),
+                  );
                 },
               ),
             ),

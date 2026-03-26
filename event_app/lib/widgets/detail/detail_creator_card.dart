@@ -1,69 +1,85 @@
 import 'package:flutter/material.dart';
 
 class DetailCreatorCard extends StatelessWidget {
-  const DetailCreatorCard({
-    super.key,
-    required this.creatorId,
-    required this.creatorTitle,
-    required this.creatorNickname,
-    required this.creatorAvatarUrl,
-    required this.onTap,
-  });
-
   final String? creatorId;
   final String creatorTitle;
   final String creatorNickname;
   final String? creatorAvatarUrl;
   final VoidCallback? onTap;
 
-  static const Color _cardBorder = Color(0xFF23262C);
-  static const Color _subtitle = Color(0xFFB5BBC7);
-  static const Color _creatorPlaceholderBg = Color(0xFF2A2E37);
+  const DetailCreatorCard({
+    super.key,
+    this.creatorId,
+    required this.creatorTitle,
+    required this.creatorNickname,
+    this.creatorAvatarUrl,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141414),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _cardBorder, width: 1),
-      ),
-      child: ListTile(
-        dense: true,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        leading: CircleAvatar(
-          radius: 18,
-          backgroundColor: _creatorPlaceholderBg,
-          backgroundImage: creatorAvatarUrl != null
-              ? NetworkImage(creatorAvatarUrl!)
-              : null,
-          child: creatorAvatarUrl != null
-              ? null
-              : const Icon(Icons.person, color: Colors.white, size: 20),
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(16),
         ),
-        title: Text(
-          creatorTitle,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            color: Colors.white,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 24,
+              backgroundColor: Colors.grey[800],
+              backgroundImage: creatorAvatarUrl != null
+                  ? NetworkImage(creatorAvatarUrl!)
+                  : null,
+              child: creatorAvatarUrl == null
+                  ? const Icon(Icons.person, color: Colors.white54, size: 28)
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    creatorTitle,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w600,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    creatorNickname,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Организатор',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 10,
+                  color: Colors.white70,
+                ),
+              ),
+            ),
+          ],
         ),
-        subtitle: Text(
-          creatorNickname,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontFamily: 'Inter',
-            color: _subtitle,
-            fontSize: 12,
-          ),
-        ),
-        onTap: (creatorId != null && creatorId!.isNotEmpty && onTap != null)
-            ? onTap
-            : null,
       ),
     );
   }
