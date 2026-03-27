@@ -20,6 +20,13 @@ class ApiClient {
   /// Без таймаута запрос к недоступному хосту на телефоне может «висеть» минутами.
   static const Duration requestTimeout = Duration(seconds: 20);
 
+  static String? getFullImageUrl(String? imagePath) {
+    if (imagePath == null || imagePath.isEmpty) return null;
+    if (imagePath.startsWith('http')) return imagePath;
+    if (imagePath.startsWith('/uploads')) return '$baseUrl$imagePath';
+    return '$baseUrl/uploads/$imagePath';
+  }
+
   Uri _uri(String path, [Map<String, String>? query]) {
     return Uri.parse('$baseUrl$path').replace(queryParameters: query);
   }

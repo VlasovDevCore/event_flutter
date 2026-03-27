@@ -5,6 +5,7 @@ class EventMessage {
   final String? userDisplayName;
   final DateTime createdAt;
   final String? userId;
+  final String? avatarUrl; // Добавляем поле для аватарки
 
   const EventMessage({
     required this.id,
@@ -13,6 +14,7 @@ class EventMessage {
     this.userDisplayName,
     required this.createdAt,
     this.userId,
+    this.avatarUrl, // Добавляем в конструктор
   });
 
   factory EventMessage.fromApi(Map<String, dynamic> map) {
@@ -23,10 +25,11 @@ class EventMessage {
       userDisplayName: map['user_display_name'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       userId: map['user_id'] as String?,
+      avatarUrl: map['avatar_url'] as String?, // Добавляем парсинг аватарки
     );
   }
 
-  // Добавьте этот геттер
+  // Геттер для отображения имени
   String get displayName {
     if (userDisplayName != null && userDisplayName!.isNotEmpty) {
       return userDisplayName!;
@@ -42,6 +45,7 @@ class EventMessage {
       'user_display_name': userDisplayName,
       'created_at': createdAt.toIso8601String(),
       'user_id': userId,
+      'avatar_url': avatarUrl,
     };
   }
 }

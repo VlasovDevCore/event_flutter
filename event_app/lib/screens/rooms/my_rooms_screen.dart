@@ -186,6 +186,9 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
         for (final entry in results) {
           _participantsByEventId[entry.key] = entry.value;
         }
+        // Обновляем события, чтобы перерисовать иконки
+        _roomsParticipating = List.from(_roomsParticipating);
+        _roomsCreated = List.from(_roomsCreated);
       });
     } catch (_) {
       // Не блокируем экран, если не удалось подгрузить участников.
@@ -218,7 +221,13 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
     final color = Color(event.markerColorValue);
     final gradientStart = Color.lerp(color, Colors.white, 0.22) ?? color;
     final gradientEnd = Color.lerp(color, Colors.black, 0.22) ?? color;
-    final icon = IconConstants.getIcon(event.markerIconCodePoint);
+
+    // Получаем иконку напрямую, без кеширования
+    final icon = IconData(
+      event.markerIconCodePoint,
+      fontFamily: 'MaterialIcons',
+    );
+
     final isEnded =
         event.endsAt != null && event.endsAt!.isBefore(DateTime.now());
     final date = event.endsAt ?? event.createdAt;

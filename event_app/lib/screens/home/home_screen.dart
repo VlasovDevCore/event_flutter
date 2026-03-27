@@ -765,64 +765,103 @@ class _HomeScreenState extends State<HomeScreen> {
                 MarkerLayer(markers: userMarker),
               ],
             ),
+            // Профиль - скругление 8px
             Positioned(
               top: topPadding + 5,
-              right: 10,
-              child: IconButton(
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xCC161616),
-                  foregroundColor: const Color(0xFFDFE3EC),
-                  elevation: 0,
-                  padding: const EdgeInsets.all(10),
-                  iconSize: 22,
+              right: 12,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xCC161616),
+                  borderRadius: BorderRadius.circular(10), // Меньше скругление
                 ),
-                icon: const Icon(Icons.person),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ProfileScreen(),
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const ProfileScreen(),
+                        ),
+                      );
+                    },
+                    splashColor: const Color.fromARGB(157, 0, 0, 0),
+                    highlightColor: const Color.fromARGB(157, 0, 0, 0),
+                    child: const Center(
+                      child: Icon(Icons.person, color: Colors.white, size: 19),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
+
+            // Геолокация - скругление 8px
             Positioned(
-              top: topPadding + 10 + 48,
-              right: 10,
-              child: IconButton(
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xCC161616),
-                  foregroundColor: const Color(0xFFDFE3EC),
-                  elevation: 0,
-                  padding: const EdgeInsets.all(10),
-                  iconSize: 22,
+              top: topPadding + 5 + 52,
+              right: 12,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xCC161616),
+                  borderRadius: BorderRadius.circular(10), // Меньше скругление
                 ),
-                icon: const Icon(Icons.my_location),
-                onPressed: () {
-                  _initLocation(zoom: 16);
-                },
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () {
+                      _initLocation(zoom: 16);
+                    },
+                    splashColor: const Color.fromARGB(157, 0, 0, 0),
+                    highlightColor: const Color.fromARGB(157, 0, 0, 0),
+                    child: const Center(
+                      child: Icon(
+                        Icons.my_location,
+                        color: Colors.white,
+                        size: 19,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
+
+            // Новости - скругление 8px
             Positioned(
-              top: topPadding + 10 + 48 + 56,
-              right: 10,
-              child: IconButton(
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xCC161616),
-                  foregroundColor: const Color(0xFFDFE3EC),
-                  elevation: 0,
-                  padding: const EdgeInsets.all(10),
-                  iconSize: 22,
+              top: topPadding + 5 + 48 + 55,
+              right: 12,
+              child: Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: const Color(0xCC161616),
+                  borderRadius: BorderRadius.circular(10), // Меньше скругление
                 ),
-                icon: const Icon(Icons.featured_play_list),
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          const NewsScreen(), // Замените NewsScreen на ваш класс экрана новостей
+                child: Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(10),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const NewsScreen(),
+                        ),
+                      );
+                    },
+                    splashColor: const Color.fromARGB(157, 0, 0, 0),
+                    highlightColor: const Color.fromARGB(157, 0, 0, 0),
+                    child: const Center(
+                      child: Icon(
+                        Icons.featured_play_list,
+                        color: Colors.white,
+                        size: 19,
+                      ),
                     ),
-                  );
-                },
+                  ),
+                ),
               ),
             ),
             Positioned(

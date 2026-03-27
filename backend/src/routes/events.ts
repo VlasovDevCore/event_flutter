@@ -498,48 +498,6 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
-// Сообщения по событию — только для участников (RSVP «приду»). После окончания события чат остаётся.
-router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
-  const { id: eventId } = req.params;
-  const userId = req.user?.id;
-  if (!userId) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  const client = await pool.connect();
-  try {
-    const participant = await client.query(
-      'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
-      [eventId, userId],
-    );
-    if (participant.rowCount === 0) {
-      return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
-    }
-    const result = await client.query(
-      `
-      SELECT m.id,
-            m.event_id,
-            m.user_id,
-            u.email AS user_email,
-            u.display_name AS user_display_name,
-            m.text,
-            m.created_at
-      FROM event_messages m
-      LEFT JOIN users u ON u.id = m.user_id
-      WHERE m.event_id = $1
-      ORDER BY m.created_at ASC
-      `,
-      [eventId],
-    );
-    return res.json(result.rows);
-  } catch (err) {
-    // eslint-disable-next-line no-console
-    console.error(err);
-    return res.status(500).json({ error: 'Internal error' });
-  } finally {
-    client.release();
-  }
-});
-
 // Отправить сообщение в чат события — только для участников (RSVP «приду»)
 router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   const { id: eventId } = req.params;
@@ -569,8 +527,16 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
       [eventId, userId, text.trim()],
     );
     const row = result.rows[0] as Record<string, unknown>;
-    const userRow = await client.query('SELECT email, display_name FROM users WHERE id = $1', [userId]);
+    
+    // ✅ ДОБАВЛЯЕМ ПОЛУЧЕНИЕ АВАТАРКИ
+    const userRow = await client.query(
+      'SELECT email, display_name, avatar_url FROM users WHERE id = $1', 
+      [userId]
+    );
+    
     (row as Record<string, unknown>).user_email = (userRow.rows[0] as { email: string })?.email ?? null;
+    (row as Record<string, unknown>).user_display_name = (userRow.rows[0] as { display_name: string })?.display_name ?? null;
+    (row as Record<string, unknown>).avatar_url = (userRow.rows[0] as { avatar_url: string })?.avatar_url ?? null;
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
     if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
@@ -578,6 +544,49 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     return res.status(201).json(row);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Сообщения по событию — только для участников (RSVP «приду»)
+router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId } = req.params;
+  const userId = req.user?.id;
+  if (!userId) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  const client = await pool.connect();
+  try {
+    const participant = await client.query(
+      'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
+      [eventId, userId],
+    );
+    if (participant.rowCount === 0) {
+      return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
+    }
+    const result = await client.query(
+      `
+      SELECT m.id,
+            m.event_id,
+            m.user_id,
+            u.email AS user_email,
+            u.display_name AS user_display_name,
+            u.avatar_url AS avatar_url,
+            m.text,
+            m.created_at
+      FROM event_messages m
+      LEFT JOIN users u ON u.id = m.user_id
+      WHERE m.event_id = $1
+      ORDER BY m.created_at ASC
+      `,
+      [eventId],
+    );
+    return res.json(result.rows);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

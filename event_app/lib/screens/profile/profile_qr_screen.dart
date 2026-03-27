@@ -8,8 +8,9 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'profile_avatar.dart';
 import 'profile_cover_gradient.dart';
 
-const Color _kBg = Color(0xFF161616);
-const Color _kSurface = Color(0xFF232323);
+const Color _kBg = Color.fromARGB(100, 22, 22, 22);
+const Color _kSurface = Color.fromARGB(100, 35, 35, 35);
+
 class ProfileQrScreen extends StatefulWidget {
   const ProfileQrScreen({
     super.key,
@@ -84,10 +85,7 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-            'Ник не указан',
-            style: TextStyle(fontFamily: 'Inter'),
-          ),
+          content: Text('Ник не указан', style: TextStyle(fontFamily: 'Inter')),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -117,23 +115,20 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
         fit: StackFit.expand,
         children: [
           const ColoredBox(color: _kBg),
+          // Основной градиент от правого верхнего угла до левого нижнего (только 3 цвета)
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topLeft,
-                  radius: 1.45,
-                  colors: [
-                    c0.withValues(alpha: 0.72),
-                    c1.withValues(alpha: 0.48),
-                    c2.withValues(alpha: 0.22),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.28, 0.52, 1.0],
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [c0, c1, c2],
+                  stops: const [0.0, 0.5, 1.0],
                 ),
               ),
             ),
           ),
+          // Нижний затемняющий градиент
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
@@ -151,23 +146,6 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
               ),
             ),
           ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.bottomRight,
-                  radius: 1.35,
-                  colors: [
-                    c2.withValues(alpha: 0.58),
-                    c1.withValues(alpha: 0.38),
-                    c0.withValues(alpha: 0.2),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 0.3, 0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
           SafeArea(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -177,7 +155,9 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                   child: Row(
                     children: [
                       Tooltip(
-                        message: MaterialLocalizations.of(context).backButtonTooltip,
+                        message: MaterialLocalizations.of(
+                          context,
+                        ).backButtonTooltip,
                         child: Container(
                           width: 37,
                           height: 37,
@@ -191,7 +171,12 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                               borderRadius: BorderRadius.circular(12),
                               onTap: () => Navigator.of(context).maybePop(),
                               splashColor: const Color.fromARGB(157, 0, 0, 0),
-                              highlightColor: const Color.fromARGB(157, 0, 0, 0),
+                              highlightColor: const Color.fromARGB(
+                                157,
+                                0,
+                                0,
+                                0,
+                              ),
                               child: const Center(
                                 child: Icon(
                                   Icons.arrow_back,
@@ -223,10 +208,15 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                     builder: (context, constraints) {
                       return SingleChildScrollView(
                         child: ConstrainedBox(
-                          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
+                          ),
                           child: Center(
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 24,
+                                vertical: 16,
+                              ),
                               child: Container(
                                 width: qrSize,
                                 height: qrSize,
@@ -235,7 +225,9 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                                   borderRadius: BorderRadius.circular(20),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.35),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.35,
+                                      ),
                                       blurRadius: 24,
                                       offset: const Offset(0, 8),
                                     ),
@@ -255,7 +247,8 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                                         color: Colors.black,
                                       ),
                                       dataModuleStyle: const QrDataModuleStyle(
-                                        dataModuleShape: QrDataModuleShape.square,
+                                        dataModuleShape:
+                                            QrDataModuleShape.square,
                                         color: Colors.black,
                                       ),
                                     ),
@@ -281,7 +274,10 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                       splashColor: Colors.black.withValues(alpha: 0.32),
                       highlightColor: Colors.black.withValues(alpha: 0.18),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 12,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(26),
                         ),
@@ -300,13 +296,14 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                                           fit: BoxFit.cover,
                                           width: 56,
                                           height: 56,
-                                          errorBuilder: (_, _, _) => const Center(
-                                            child: Icon(
-                                              Icons.person,
-                                              color: Colors.white70,
-                                              size: 30,
-                                            ),
-                                          ),
+                                          errorBuilder: (_, _, _) =>
+                                              const Center(
+                                                child: Icon(
+                                                  Icons.person,
+                                                  color: Colors.white70,
+                                                  size: 30,
+                                                ),
+                                              ),
                                         )
                                       : const Center(
                                           child: Icon(
@@ -352,17 +349,24 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                             IconButton(
                               onPressed: () => _copyNickname(context),
                               style: IconButton.styleFrom(
-                                foregroundColor:
-                                    _nickCopied ? _kCopiedGreen : Colors.white,
+                                foregroundColor: _nickCopied
+                                    ? _kCopiedGreen
+                                    : Colors.white,
                                 backgroundColor: Colors.transparent,
                                 shadowColor: Colors.transparent,
                                 surfaceTintColor: Colors.transparent,
                               ),
                               icon: Icon(
-                                _nickCopied ? Icons.check_rounded : Icons.copy_rounded,
-                                color: _nickCopied ? _kCopiedGreen : Colors.white,
+                                _nickCopied
+                                    ? Icons.check_rounded
+                                    : Icons.copy_rounded,
+                                color: _nickCopied
+                                    ? _kCopiedGreen
+                                    : Colors.white,
                               ),
-                              tooltip: _nickCopied ? 'Скопировано' : 'Копировать ник',
+                              tooltip: _nickCopied
+                                  ? 'Скопировано'
+                                  : 'Копировать ник',
                             ),
                           ],
                         ),
@@ -384,7 +388,10 @@ class _ProfileQrScreenState extends State<ProfileQrScreen> {
                         ),
                       ),
                       onPressed: () => _openScanner(context),
-                      icon: const Icon(Icons.qr_code_scanner, color: Colors.black),
+                      icon: const Icon(
+                        Icons.qr_code_scanner,
+                        color: Colors.black,
+                      ),
                       label: const Text(
                         'Открыть QR-сканер',
                         style: TextStyle(
@@ -416,7 +423,8 @@ class _ProfileQrScannerPage extends StatefulWidget {
 }
 
 class _ProfileQrScannerPageState extends State<_ProfileQrScannerPage> {
-  late final MobileScannerController _scannerController = MobileScannerController();
+  late final MobileScannerController _scannerController =
+      MobileScannerController();
   bool _opened = false;
 
   String? _extractUserId(String? raw) {
@@ -446,9 +454,7 @@ class _ProfileQrScannerPageState extends State<_ProfileQrScannerPage> {
     _opened = true;
     _scannerController.stop();
     Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(
-        builder: (_) => widget.buildProfileScreen(value),
-      ),
+      MaterialPageRoute<void>(builder: (_) => widget.buildProfileScreen(value)),
     );
   }
 
@@ -507,7 +513,9 @@ class _ProfileQrScannerPageState extends State<_ProfileQrScannerPage> {
                 child: Row(
                   children: [
                     Tooltip(
-                      message: MaterialLocalizations.of(context).backButtonTooltip,
+                      message: MaterialLocalizations.of(
+                        context,
+                      ).backButtonTooltip,
                       child: Container(
                         width: 37,
                         height: 37,
@@ -555,10 +563,7 @@ class _ProfileQrScannerPageState extends State<_ProfileQrScannerPage> {
               width: qrSize,
               height: qrSize,
               decoration: BoxDecoration(
-                border: Border.all(
-                  color: Colors.white,
-                  width: 3,
-                ),
+                border: Border.all(color: Colors.white, width: 3),
                 borderRadius: BorderRadius.circular(20),
               ),
             ),
