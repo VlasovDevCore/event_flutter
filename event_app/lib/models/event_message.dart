@@ -1,4 +1,15 @@
 class EventMessage {
+  /// ISO из API (UTC с Z) → локальное время устройства для отображения.
+  static DateTime parseDateTimeFromApi(String raw) {
+    final dt = DateTime.parse(raw.trim());
+    return dt.isUtc ? dt.toLocal() : dt;
+  }
+
+  static DateTime? tryParseDateTimeFromApi(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    return parseDateTimeFromApi(raw);
+  }
+
   final String id;
   final String text;
   final String userEmail;
@@ -28,7 +39,7 @@ class EventMessage {
         map['viewed_at'] ?? map['read_at'] ?? map['seen_at'] ?? map['readAt'];
     DateTime? viewedAt;
     if (viewedAtRaw is String && viewedAtRaw.isNotEmpty) {
-      viewedAt = DateTime.tryParse(viewedAtRaw);
+      viewedAt = EventMessage.tryParseDateTimeFromApi(viewedAtRaw);
     }
 
     final isViewedRaw = map['is_viewed'] ?? map['is_read'] ?? map['isSeen'];
@@ -37,7 +48,7 @@ class EventMessage {
     final editedAtRaw = map['edited_at'] ?? map['editedAt'];
     DateTime? editedAt;
     if (editedAtRaw is String && editedAtRaw.isNotEmpty) {
-      editedAt = DateTime.tryParse(editedAtRaw);
+      editedAt = EventMessage.tryParseDateTimeFromApi(editedAtRaw);
     }
 
     return EventMessage(
@@ -45,7 +56,7 @@ class EventMessage {
       text: map['text'] as String,
       userEmail: (map['user_email'] as String?) ?? '',
       userDisplayName: map['user_display_name'] as String?,
-      createdAt: DateTime.parse(map['created_at'] as String),
+      createdAt: EventMessage.parseDateTimeFromApi(map['created_at'] as String),
       userId: map['user_id'] as String?,
       avatarUrl: map['avatar_url'] as String?, // Добавляем парсинг аватарки
       isViewed: isViewed,
