@@ -522,7 +522,7 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
       `
       INSERT INTO event_messages (event_id, user_id, text)
       VALUES ($1, $2, $3)
-      RETURNING id, event_id, user_id, text, created_at
+      RETURNING id, event_id, user_id, text, created_at, edited_at
       `,
       [eventId, userId, text.trim()],
     );
@@ -544,6 +544,68 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
     }
 
     return res.status(201).json(row);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Отметить сообщения как прочитанные (просмотренные) в чате события
+// Тело: { up_to_id: string } — отметить все чужие сообщения до этого (включительно)
+router.post('/:id/messages/view', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId } = req.params;
+  const userId = req.user?.id;
+  const { up_to_id: upToId } = (req.body ?? {}) as { up_to_id?: string };
+
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!upToId || typeof upToId !== 'string') {
+    return res.status(400).json({ error: 'up_to_id обязателен' });
+  }
+
+  const client = await pool.connect();
+  try {
+    const participant = await client.query(
+      'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
+      [eventId, userId],
+    );
+    if (participant.rowCount === 0) {
+      return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
+    }
+
+    const anchor = await client.query(
+      `SELECT id, created_at FROM event_messages WHERE id = $1 AND event_id = $2`,
+      [upToId, eventId],
+    );
+    if (anchor.rowCount === 0) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    const upToCreatedAt = anchor.rows[0].created_at as Date;
+
+    await client.query(
+      `
+      INSERT INTO event_message_views (message_id, user_id, viewed_at)
+      SELECT m.id, $2, now()
+      FROM event_messages m
+      WHERE m.event_id = $1
+        AND m.user_id <> $2
+        AND m.created_at <= $3
+      ON CONFLICT (message_id, user_id)
+      DO UPDATE SET viewed_at = EXCLUDED.viewed_at
+      `,
+      [eventId, userId, upToCreatedAt],
+    );
+
+    const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
+    if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
+      (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } })
+        .to(`event:${eventId}`)
+        .emit('messagesViewed', { event_id: eventId, user_id: userId, up_to_id: upToId });
+    }
+
+    return res.json({ success: true });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -578,15 +640,150 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
             u.display_name AS user_display_name,
             u.avatar_url AS avatar_url,
             m.text,
-            m.created_at
+            m.created_at,
+            m.edited_at,
+            CASE
+              WHEN m.user_id = $2 THEN EXISTS (
+                SELECT 1
+                FROM event_message_views v
+                WHERE v.message_id = m.id AND v.user_id <> $2
+              )
+              ELSE EXISTS (
+                SELECT 1
+                FROM event_message_views v
+                WHERE v.message_id = m.id AND v.user_id = $2
+              )
+            END AS is_viewed,
+            (
+              SELECT v.viewed_at
+              FROM event_message_views v
+              WHERE v.message_id = m.id AND v.user_id = $2
+              LIMIT 1
+            ) AS viewed_at
       FROM event_messages m
       LEFT JOIN users u ON u.id = m.user_id
       WHERE m.event_id = $1
       ORDER BY m.created_at ASC
       `,
-      [eventId],
+      [eventId, userId],
     );
     return res.json(result.rows);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Изменить своё сообщение в чате события
+router.put('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId, messageId } = req.params;
+  const userId = req.user?.id;
+  const { text } = req.body as { text?: string };
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!text || typeof text !== 'string' || text.trim() === '') {
+    return res.status(400).json({ error: 'Текст сообщения обязателен' });
+  }
+  const client = await pool.connect();
+  try {
+    const participant = await client.query(
+      'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
+      [eventId, userId],
+    );
+    if (participant.rowCount === 0) {
+      return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
+    }
+    const upd = await client.query(
+      `
+      UPDATE event_messages
+      SET text = $1, edited_at = now()
+      WHERE id = $2 AND event_id = $3 AND user_id = $4
+      RETURNING id, event_id, user_id, text, created_at, edited_at
+      `,
+      [text.trim(), messageId, eventId, userId],
+    );
+    if (upd.rowCount === 0) {
+      return res.status(404).json({ error: 'Сообщение не найдено или не ваше' });
+    }
+    const row = upd.rows[0] as Record<string, unknown>;
+    const authorId = row.user_id as string;
+    const userRow = await client.query(
+      'SELECT email, display_name, avatar_url FROM users WHERE id = $1',
+      [authorId],
+    );
+    (row as Record<string, unknown>).user_email =
+      (userRow.rows[0] as { email: string })?.email ?? null;
+    (row as Record<string, unknown>).user_display_name =
+      (userRow.rows[0] as { display_name: string })?.display_name ?? null;
+    (row as Record<string, unknown>).avatar_url =
+      (userRow.rows[0] as { avatar_url: string })?.avatar_url ?? null;
+
+    const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
+    if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
+      const r = row as Record<string, unknown>;
+      const toIso = (v: unknown) =>
+        v instanceof Date ? v.toISOString() : v != null ? String(v) : null;
+      const payload = {
+        ...r,
+        id: String(r.id),
+        created_at: toIso(r.created_at),
+        edited_at: toIso(r.edited_at),
+      };
+      (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } })
+        .to(`event:${eventId}`)
+        .emit('messageUpdated', payload);
+    }
+    return res.json(row);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Удалить сообщение: автор или организатор события
+router.delete('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId, messageId } = req.params;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  const client = await pool.connect();
+  try {
+    const participant = await client.query(
+      'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
+      [eventId, userId],
+    );
+    if (participant.rowCount === 0) {
+      return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
+    }
+    const del = await client.query(
+      `
+      DELETE FROM event_messages m
+      WHERE m.id = $1 AND m.event_id = $2
+        AND (
+          m.user_id = $3
+          OR EXISTS (
+            SELECT 1 FROM events e
+            WHERE e.id = m.event_id AND e.created_by = $3
+          )
+        )
+      RETURNING m.id
+      `,
+      [messageId, eventId, userId],
+    );
+    if (del.rowCount === 0) {
+      return res.status(404).json({ error: 'Сообщение не найдено или нет прав' });
+    }
+    const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
+    if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
+      (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } })
+        .to(`event:${eventId}`)
+        .emit('messageDeleted', { event_id: eventId, id: messageId });
+    }
+    return res.json({ success: true });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

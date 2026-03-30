@@ -108,6 +108,37 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> delete(
+    String path, {
+    bool withAuth = false,
+  }) async {
+    final headers = <String, String>{};
+    if (withAuth) {
+      final authBox = Hive.box('authBox');
+      final token = authBox.get('token') as String?;
+      if (token != null) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+    }
+
+    final res = await _withTimeout(
+      http.delete(_uri(path), headers: headers),
+    );
+
+    final data = res.body.isNotEmpty
+        ? jsonDecode(res.body) as Map<String, dynamic>
+        : <String, dynamic>{};
+
+    if (res.statusCode >= 200 && res.statusCode < 300) {
+      return data;
+    }
+
+    throw ApiException(
+      res.statusCode,
+      data['error']?.toString() ?? 'Request failed',
+    );
+  }
+
   Future<Map<String, dynamic>> get(
     String path, {
     Map<String, String>? query,

@@ -102,7 +102,7 @@ io.on('connection', (socket) => {
           `
           INSERT INTO event_messages (event_id, user_id, text)
           VALUES ($1, $2, $3)
-          RETURNING id, event_id, user_id, text, created_at
+          RETURNING id, event_id, user_id, text, created_at, edited_at
           `,
           [eventId, userId, text.trim()],
         );
