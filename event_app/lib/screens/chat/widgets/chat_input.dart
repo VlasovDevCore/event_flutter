@@ -20,17 +20,7 @@ class ChatInput extends StatelessWidget {
           child: Container(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
             decoration: BoxDecoration(
-              color: chat.inputBar,
-              border: Border(
-                top: BorderSide(color: chat.inputDivider, width: 1),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.35),
-                  blurRadius: 18,
-                  offset: const Offset(0, -4),
-                ),
-              ],
+              color: const Color(0xFF161616),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -41,8 +31,6 @@ class ChatInput extends StatelessWidget {
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    _buildEmojiButton(context),
-                    const SizedBox(width: 4),
                     Expanded(child: _buildTextField(context)),
                     const SizedBox(width: 8),
                     _buildSendButton(context),
@@ -59,29 +47,10 @@ class ChatInput extends StatelessWidget {
     );
   }
 
-  Widget _buildEmojiButton(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final disabled = bloc.error != null;
-
-    return IconButton(
-      padding: const EdgeInsets.only(bottom: 2),
-      icon: Icon(
-        bloc.emojiPickerVisible
-            ? Icons.keyboard_alt_outlined
-            : Icons.emoji_emotions_outlined,
-        color: disabled
-            ? scheme.onSurface.withValues(alpha: 0.35)
-            : scheme.onSurfaceVariant,
-        size: 26,
-      ),
-      tooltip: bloc.emojiPickerVisible ? 'Клавиатура' : 'Смайлы',
-      onPressed: disabled ? null : bloc.toggleEmojiPicker,
-    );
-  }
-
   Widget _buildTextField(BuildContext context) {
     final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
+    final disabled = bloc.error != null;
 
     return TextField(
       controller: bloc.textController,
@@ -108,21 +77,34 @@ class ChatInput extends StatelessWidget {
         ),
         filled: true,
         fillColor: chat.inputField,
+        suffixIcon: IconButton(
+          icon: Icon(
+            bloc.emojiPickerVisible
+                ? Icons.keyboard_alt_outlined
+                : Icons.emoji_emotions_outlined,
+            color: disabled
+                ? scheme.onSurface.withValues(alpha: 0.35)
+                : scheme.onSurfaceVariant,
+            size: 22,
+          ),
+          onPressed: disabled ? null : bloc.toggleEmojiPicker,
+        ),
+        suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: scheme.outline.withValues(alpha: 0.22),
+            color: Colors.white.withValues(alpha: 0.22),
           ),
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: scheme.outline.withValues(alpha: 0.18),
+            color: Colors.white.withValues(alpha: 0.18),
           ),
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(22),
-          borderSide: BorderSide(color: scheme.primary.withValues(alpha: 0.65)),
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.65)),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -143,20 +125,20 @@ class ChatInput extends StatelessWidget {
 
     return Material(
       color: disabled
-          ? scheme.surfaceContainerHighest.withValues(alpha: 0.5)
-          : scheme.primary,
-      borderRadius: BorderRadius.circular(14),
+          ? Colors.white.withValues(alpha: 0.5)
+          : Colors.white,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: disabled ? null : bloc.sendMessage,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         child: SizedBox(
-          width: 44,
-          height: 44,
+          width: 48,
+          height: 48,
           child: Icon(
             icon,
             color: disabled
-                ? scheme.onSurface.withValues(alpha: 0.35)
-                : scheme.onPrimary,
+                ? Colors.black.withValues(alpha: 0.35)
+                : Colors.black,
             size: 22,
           ),
         ),
@@ -201,6 +183,7 @@ class ChatInput extends StatelessWidget {
               ),
               bottomActionBarConfig: BottomActionBarConfig(
                 backgroundColor: scheme.surfaceContainerHigh,
+                showSearchViewButton: false,
                 buttonColor: scheme.surfaceContainerHighest,
                 buttonIconColor: scheme.onSurfaceVariant,
               ),

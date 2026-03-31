@@ -10,7 +10,7 @@ class MessageBubbleMy extends StatelessWidget {
   final bool isSent;
   final bool isFirstInGroup;
   final bool isLastInGroup;
-  final VoidCallback onLongPress;
+  final ValueChanged<Offset> onActionRequested;
 
   const MessageBubbleMy({
     super.key,
@@ -20,13 +20,14 @@ class MessageBubbleMy extends StatelessWidget {
     required this.isSent,
     required this.isFirstInGroup,
     required this.isLastInGroup,
-    required this.onLongPress,
+    required this.onActionRequested,
   });
 
   @override
   Widget build(BuildContext context) {
     final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
+    Offset? lastDown;
     final topRight = isFirstInGroup ? 18.0 : 6.0;
     final bottomRight = isLastInGroup ? 18.0 : 6.0;
     final borderRadius = BorderRadius.only(
@@ -51,8 +52,9 @@ class MessageBubbleMy extends StatelessWidget {
               borderRadius: borderRadius,
               clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: onLongPress,
-                onLongPress: onLongPress,
+                onTapDown: (d) => lastDown = d.globalPosition,
+                onTap: () => onActionRequested(lastDown ?? Offset.zero),
+                onLongPress: () => onActionRequested(lastDown ?? Offset.zero),
                 borderRadius: borderRadius,
                 child: Ink(
                   decoration: BoxDecoration(

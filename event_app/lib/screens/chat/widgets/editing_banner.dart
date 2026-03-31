@@ -34,7 +34,8 @@ class EditingBanner extends StatelessWidget {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: scheme.primary.withValues(alpha: 0.28),
+              color: Colors.white.withValues(alpha: 0.5),  // ← белая обводка с прозрачностью
+              width: 1.0,
             ),
           ),
           child: Padding(
@@ -46,7 +47,7 @@ class EditingBanner extends StatelessWidget {
                   child: Icon(
                     Icons.edit_outlined,
                     size: 20,
-                    color: chat.editingAccent,
+                    color: Colors.white.withValues(alpha: 0.8),  // ← белая иконка с прозрачностью
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -61,7 +62,7 @@ class EditingBanner extends StatelessWidget {
                           fontFamily: 'Inter',
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: chat.editingAccent,
+                          color: Colors.white.withValues(alpha: 0.9),  // ← белый текст с прозрачностью
                           letterSpacing: 0.2,
                         ),
                       ),
@@ -73,7 +74,7 @@ class EditingBanner extends StatelessWidget {
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 12,
-                          color: scheme.onSurfaceVariant,
+                          color: Colors.white.withValues(alpha: 0.7),  // ← белый текст превью с прозрачностью
                           height: 1.25,
                         ),
                       ),
@@ -83,11 +84,10 @@ class EditingBanner extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     Icons.close_rounded,
-                    color: scheme.onSurfaceVariant,
+                    color: Colors.white.withValues(alpha: 0.7),  // ← белая иконка закрытия с прозрачностью
                     size: 22,
                   ),
                   onPressed: bloc.cancelEditing,
-                  tooltip: 'Отменить редактирование',
                 ),
               ],
             ),

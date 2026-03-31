@@ -49,16 +49,7 @@ class ChatBody extends StatelessWidget {
 
         final chat = EventChatTheme.of(context);
         return Container(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                chat.scaffold,
-                Color.lerp(chat.scaffold, scheme.primary, 0.06)!,
-              ],
-            ),
-          ),
+          color: const Color(0xFF161616),  // ← сплошной цвет
           child: Stack(
             children: [
               ChatMessageList(bloc: bloc),

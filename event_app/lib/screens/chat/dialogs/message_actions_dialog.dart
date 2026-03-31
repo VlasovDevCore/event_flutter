@@ -3,6 +3,16 @@ import 'package:flutter/services.dart';
 import '../../../models/event_message.dart';
 
 class MessageActionsDialog {
+  static RelativeRect? _anchorPosition(BuildContext anchorContext) {
+    final renderObject = anchorContext.findRenderObject();
+    final overlay = Overlay.of(anchorContext).context.findRenderObject();
+    if (renderObject is! RenderBox || overlay is! RenderBox) return null;
+
+    final topLeft = renderObject.localToGlobal(Offset.zero, ancestor: overlay);
+    final rect = topLeft & renderObject.size;
+    return RelativeRect.fromRect(rect, Offset.zero & overlay.size);
+  }
+
   static void showMyMessageActions(
     BuildContext context,
     EventMessage message,
@@ -14,61 +24,84 @@ class MessageActionsDialog {
     final canEdit = !isTemp && !isSending;
     final canDelete = isTemp || (!isTemp && !isSending);
 
-    showModalBottomSheet<void>(
+    final scheme = Theme.of(context).colorScheme;
+    final position = _anchorPosition(context);
+
+    showMenu<String>(
       context: context,
-      backgroundColor: const Color(0xFF202020),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.copy, color: Colors.white70),
-              title: const Text(
+      position: position ?? const RelativeRect.fromLTRB(16, 16, 16, 16),
+      color: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: [
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_rounded, color: scheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Text(
                 'Скопировать',
-                style: TextStyle(fontFamily: 'Inter', color: Colors.white),
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              onTap: () {
-                Navigator.pop(ctx);
-                Clipboard.setData(ClipboardData(text: message.text));
-              },
-            ),
-            if (canEdit)
-              ListTile(
-                leading: const Icon(Icons.edit_outlined, color: Colors.white70),
-                title: const Text(
+            ],
+          ),
+        ),
+        if (canEdit)
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, color: scheme.primary, size: 20),
+                const SizedBox(width: 10),
+                Text(
                   'Изменить',
-                  style: TextStyle(fontFamily: 'Inter', color: Colors.white),
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: scheme.onSurface,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  onEdit();
-                },
-              ),
-            if (canDelete)
-              ListTile(
-                leading: const Icon(
-                  Icons.delete_outline,
-                  color: Colors.redAccent,
-                ),
-                title: const Text(
+              ],
+            ),
+          ),
+        if (canDelete)
+          PopupMenuItem<String>(
+            value: 'delete',
+            child: Row(
+              children: [
+                Icon(Icons.delete_outline_rounded,
+                    color: scheme.error, size: 20),
+                const SizedBox(width: 10),
+                Text(
                   'Удалить',
                   style: TextStyle(
                     fontFamily: 'Inter',
-                    color: Colors.redAccent,
+                    color: scheme.error,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  onDelete();
-                },
-              ),
-          ],
-        ),
-      ),
-    );
+              ],
+            ),
+          ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      switch (value) {
+        case 'copy':
+          Clipboard.setData(ClipboardData(text: message.text));
+          break;
+        case 'edit':
+          onEdit();
+          break;
+        case 'delete':
+          onDelete();
+          break;
+      }
+    });
   }
 
   static void showOrganizerOtherMessageActions(
@@ -76,45 +109,61 @@ class MessageActionsDialog {
     EventMessage message,
     VoidCallback onDelete,
   ) {
-    showModalBottomSheet<void>(
+    final scheme = Theme.of(context).colorScheme;
+    final position = _anchorPosition(context);
+
+    showMenu<String>(
       context: context,
-      backgroundColor: const Color(0xFF202020),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.copy, color: Colors.white70),
-              title: const Text(
+      position: position ?? const RelativeRect.fromLTRB(16, 16, 16, 16),
+      color: scheme.surfaceContainerHigh,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      items: [
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Row(
+            children: [
+              Icon(Icons.copy_rounded, color: scheme.primary, size: 20),
+              const SizedBox(width: 10),
+              Text(
                 'Скопировать',
-                style: TextStyle(fontFamily: 'Inter', color: Colors.white),
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: scheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
               ),
-              onTap: () {
-                Navigator.pop(ctx);
-                Clipboard.setData(ClipboardData(text: message.text));
-              },
-            ),
-            ListTile(
-              leading: const Icon(
-                Icons.delete_outline,
-                color: Colors.redAccent,
-              ),
-              title: const Text(
-                'Удалить сообщение',
-                style: TextStyle(fontFamily: 'Inter', color: Colors.redAccent),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                onDelete();
-              },
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-    );
+        PopupMenuItem<String>(
+          value: 'delete',
+          child: Row(
+            children: [
+              Icon(Icons.delete_outline_rounded, color: scheme.error, size: 20),
+              const SizedBox(width: 10),
+              Text(
+                'Удалить сообщение',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: scheme.error,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == null) return;
+      switch (value) {
+        case 'copy':
+          Clipboard.setData(ClipboardData(text: message.text));
+          break;
+        case 'delete':
+          onDelete();
+          break;
+      }
+    });
   }
 
   static Future<bool?> showDeleteConfirmation(BuildContext context) async {

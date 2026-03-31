@@ -46,7 +46,7 @@ class ChatMessageList extends StatelessWidget {
             isSent: bloc.sentStatus[msg.id] ?? true,
             isFirstInGroup: _isFirstInGroup(messages, msgIndex),
             isLastInGroup: _isLastInGroup(messages, msgIndex),
-            onLongPress: () => bloc.showMyMessageActions(msg),
+            onActionRequested: (pos) => bloc.showMyMessageActions(pos, msg),
           );
         } else {
           bubble = MessageBubbleOther(
@@ -55,7 +55,8 @@ class ChatMessageList extends StatelessWidget {
             isFirstInGroup: _isFirstInGroup(messages, msgIndex),
             isLastInGroup: _isLastInGroup(messages, msgIndex),
             isOrganizer: bloc.isOrganizer,
-            onOrganizerTap: () => bloc.showOrganizerMessageActions(msg),
+            onOrganizerActionRequested: (pos) =>
+                bloc.showOrganizerMessageActions(pos, msg),
             onCopyTap: () => bloc.copyMessage(msg.text),
           );
         }

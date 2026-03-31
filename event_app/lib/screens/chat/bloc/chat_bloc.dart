@@ -34,8 +34,8 @@ class ChatBloc extends ChangeNotifier {
   final ScrollController scrollController = ScrollController();
 
   // Добавляем колбэки для UI
-  Function(EventMessage, bool)? onShowMyMessageActions;
-  Function(EventMessage)? onShowOrganizerMessageActions;
+  Function(Offset, EventMessage, bool)? onShowMyMessageActions;
+  Function(Offset, EventMessage)? onShowOrganizerMessageActions;
   Function(String)? onShowError;
 
   static const double scrollToBottomThresholdPx = 140;
@@ -144,13 +144,13 @@ class ChatBloc extends ChangeNotifier {
     });
   }
 
-  void showMyMessageActions(EventMessage msg) {
+  void showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
     final isSending = sendingStatus[msg.id] ?? false;
-    onShowMyMessageActions?.call(msg, isSending);
+    onShowMyMessageActions?.call(anchorGlobalPosition, msg, isSending);
   }
 
-  void showOrganizerMessageActions(EventMessage msg) {
-    onShowOrganizerMessageActions?.call(msg);
+  void showOrganizerMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
+    onShowOrganizerMessageActions?.call(anchorGlobalPosition, msg);
   }
 
   void _setupScrollListener() {

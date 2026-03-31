@@ -12,7 +12,7 @@ class MessageBubbleOther extends StatelessWidget {
   final bool isLastInGroup;
   final bool isOrganizer;
   /// Действия организатора (удалить и т.д.)
-  final VoidCallback onOrganizerTap;
+  final ValueChanged<Offset> onOrganizerActionRequested;
   /// Копирование для обычного участника (не организатор)
   final VoidCallback onCopyTap;
 
@@ -23,7 +23,7 @@ class MessageBubbleOther extends StatelessWidget {
     required this.isFirstInGroup,
     required this.isLastInGroup,
     required this.isOrganizer,
-    required this.onOrganizerTap,
+    required this.onOrganizerActionRequested,
     required this.onCopyTap,
   });
 
@@ -33,9 +33,10 @@ class MessageBubbleOther extends StatelessWidget {
     final fullAvatarUrl = ApiClient.getFullImageUrl(message.avatarUrl);
     final showName = isFirstInGroup;
     final showAvatar = isLastInGroup;
+    Offset? lastDown;
 
-    final topLeft = isFirstInGroup ? 18.0 : 8.0;
-    final bottomLeft = isLastInGroup ? 8.0 : 18.0;
+    final topLeft = isFirstInGroup ? 18.0 : 6.0;
+    final bottomLeft = isLastInGroup ? 18.0 : 6.0;
     final borderRadius = BorderRadius.only(
       topLeft: Radius.circular(topLeft),
       topRight: const Radius.circular(18),
@@ -81,14 +82,19 @@ class MessageBubbleOther extends StatelessWidget {
       ),
     );
 
-    final onBubble = isOrganizer ? onOrganizerTap : onCopyTap;
+    final onBubbleTap = isOrganizer
+        ? () => onOrganizerActionRequested(lastDown ?? Offset.zero)
+        : onCopyTap;
     final bubble = Material(
       color: Colors.transparent,
       borderRadius: borderRadius,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onBubble,
-        onLongPress: onBubble,
+        onTap: onBubbleTap,
+        onTapDown: (d) => lastDown = d.globalPosition,
+        onLongPress: isOrganizer
+            ? () => onOrganizerActionRequested(lastDown ?? Offset.zero)
+            : onCopyTap,
         borderRadius: borderRadius,
         child: bubbleContent,
       ),
@@ -100,7 +106,7 @@ class MessageBubbleOther extends StatelessWidget {
         if (showAvatar)
           _buildAvatar(context, fullAvatarUrl)
         else
-          const SizedBox(width: 40),
+          const SizedBox(width: 42),
 
         Expanded(
           child: Column(

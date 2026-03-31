@@ -35,9 +35,10 @@ class _EventChatScreenState extends State<EventChatScreen> {
     _bloc.onShowError ??= _showToast;
   }
 
-  void _showMyMessageActions(EventMessage msg, bool isSending) {
+  void _showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg, bool isSending) {
     MessageActionsDialog.showMyMessageActions(
       context,
+      anchorGlobalPosition,
       msg,
       isSending,
       () => _bloc.startEditingMessage(msg),
@@ -52,9 +53,10 @@ class _EventChatScreenState extends State<EventChatScreen> {
     );
   }
 
-  void _showOrganizerMessageActions(EventMessage msg) {
+  void _showOrganizerMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
     MessageActionsDialog.showOrganizerOtherMessageActions(
       context,
+      anchorGlobalPosition,
       msg,
       () async {
         final confirmed = await MessageActionsDialog.showDeleteConfirmation(
@@ -98,11 +100,18 @@ class _EventChatScreenState extends State<EventChatScreen> {
     return Scaffold(
       backgroundColor: chat.scaffold,
       appBar: ChatAppBar(event: widget.event),
-      body: Column(
-        children: [
-          Expanded(child: ChatBody(bloc: _bloc)),
-          ChatInput(bloc: _bloc),
-        ],
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          _bloc.inputFocusNode.unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        child: Column(
+          children: [
+            Expanded(child: ChatBody(bloc: _bloc)),
+            ChatInput(bloc: _bloc),
+          ],
+        ),
       ),
     );
   }
