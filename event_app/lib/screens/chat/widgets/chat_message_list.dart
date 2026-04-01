@@ -62,6 +62,7 @@ class ChatMessageList extends StatelessWidget {
         }
 
         return Padding(
+          key: ValueKey(msg.id), // 👈 ВОТ СЮДА ДОБАВЬ КЛЮЧ
           padding: EdgeInsets.only(top: gapTop),
           child: bubble,
         );

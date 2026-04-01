@@ -21,6 +21,7 @@ class ChatBloc extends ChangeNotifier {
   io.Socket? socket;
   bool showScrollToBottom = false;
   int pendingNewMessagesCount = 0;
+  final List<EventMessage> _bufferedNewMessages = [];
   String? editingMessageId;
   bool emojiPickerVisible = false;
   String? lastMarkedViewUpToId;
@@ -144,12 +145,27 @@ class ChatBloc extends ChangeNotifier {
     });
   }
 
+  void _flushBufferedIfAtBottom() {
+    if (_bufferedNewMessages.isEmpty) return;
+    if (!isScrolledToBottom()) return;
+
+    messages = [...messages, ..._bufferedNewMessages];
+    _bufferedNewMessages.clear();
+    pendingNewMessagesCount = 0;
+    notifyListeners();
+
+    _scheduleMarkViewed();
+  }
+
   void showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
     final isSending = sendingStatus[msg.id] ?? false;
     onShowMyMessageActions?.call(anchorGlobalPosition, msg, isSending);
   }
 
-  void showOrganizerMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
+  void showOrganizerMessageActions(
+    Offset anchorGlobalPosition,
+    EventMessage msg,
+  ) {
     onShowOrganizerMessageActions?.call(anchorGlobalPosition, msg);
   }
 
@@ -157,18 +173,14 @@ class ChatBloc extends ChangeNotifier {
     scrollController.addListener(() {
       final offset = scrollController.offset;
       final maxExt = scrollController.position.maxScrollExtent;
-      final shouldShow =
-          maxExt > 0 && offset > scrollToBottomThresholdPx;
+      final shouldShow = maxExt > 0 && offset > scrollToBottomThresholdPx;
 
       if (shouldShow != showScrollToBottom) {
         showScrollToBottom = shouldShow;
         notifyListeners();
       }
 
-      if (isScrolledToBottom() && pendingNewMessagesCount > 0) {
-        pendingNewMessagesCount = 0;
-        notifyListeners();
-      }
+      _flushBufferedIfAtBottom();
 
       markMessagesViewedIfNeeded();
     });
@@ -333,6 +345,12 @@ class ChatBloc extends ChangeNotifier {
   }
 
   void scrollToBottom() {
+    // Если пользователь явно нажал «вниз», сразу показываем накопленные сообщения
+    // (и одновременно сбрасываем счётчик).
+    if (_bufferedNewMessages.isNotEmpty) {
+      messages = [...messages, ..._bufferedNewMessages];
+      _bufferedNewMessages.clear();
+    }
     pendingNewMessagesCount = 0;
     notifyListeners();
     _scrollToEnd();
@@ -366,25 +384,39 @@ class ChatBloc extends ChangeNotifier {
 
     final msg = EventMessage.fromApi(map);
     if (myId != null && msg.userId == myId) return;
-    if (messages.any((m) => m.id == msg.id)) return;
+    if (messages.any((m) => m.id == msg.id) ||
+        _bufferedNewMessages.any((m) => m.id == msg.id)) {
+      return;
+    }
 
     final wasAtBottom = isScrolledToBottom();
+
+    // Если пользователь не внизу — копим, но не показываем.
+    if (!wasAtBottom) {
+      _bufferedNewMessages.add(msg);
+      pendingNewMessagesCount = _bufferedNewMessages.length;
+      notifyListeners();
+      return;
+    }
+
+    // Пользователь внизу — добавляем и показываем сразу.
     messages = [...messages, msg];
     notifyListeners();
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (wasAtBottom) {
-        if (pendingNewMessagesCount > 0) {
-          pendingNewMessagesCount = 0;
-          notifyListeners();
+    // Если пользователь был внизу - прокручиваем к новому сообщению
+    if (wasAtBottom) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) {
+          // Плавно прокручиваем вниз
+          scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          );
+          _scheduleMarkViewed();
         }
-        _scrollToEnd();
-        _scheduleMarkViewed();
-      } else {
-        pendingNewMessagesCount++;
-        notifyListeners();
-      }
-    });
+      });
+    }
   }
 
   void _handleMessagesViewed(dynamic data) {
@@ -434,6 +466,16 @@ class ChatBloc extends ChangeNotifier {
           editedAt: editedAtNew ?? prev.editedAt,
         );
         notifyListeners();
+        return;
+      }
+
+      final j = _bufferedNewMessages.indexWhere((m) => m.id == idStr);
+      if (j != -1) {
+        final prev = _bufferedNewMessages[j];
+        _bufferedNewMessages[j] = prev.copyWith(
+          text: textNew,
+          editedAt: editedAtNew ?? prev.editedAt,
+        );
       }
     } catch (_) {}
   }
@@ -445,6 +487,11 @@ class ChatBloc extends ChangeNotifier {
     final id = map['id'] as String?;
     if (id != null) {
       messages.removeWhere((m) => m.id == id);
+      final before = _bufferedNewMessages.length;
+      _bufferedNewMessages.removeWhere((m) => m.id == id);
+      if (_bufferedNewMessages.length != before) {
+        pendingNewMessagesCount = _bufferedNewMessages.length;
+      }
       notifyListeners();
     }
   }

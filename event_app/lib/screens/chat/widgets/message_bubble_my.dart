@@ -28,12 +28,12 @@ class MessageBubbleMy extends StatelessWidget {
     final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     Offset? lastDown;
-    final topRight = isFirstInGroup ? 18.0 : 6.0;
-    final bottomRight = isLastInGroup ? 18.0 : 6.0;
+    final topRight = isFirstInGroup ? 12.0 : 4.0; // было 18/6
+    final bottomRight = isLastInGroup ? 12.0 : 4.0; // было 18/6
     final borderRadius = BorderRadius.only(
-      topLeft: const Radius.circular(18),
+      topLeft: const Radius.circular(12), // было 18
       topRight: Radius.circular(topRight),
-      bottomLeft: const Radius.circular(18),
+      bottomLeft: const Radius.circular(12), // было 18
       bottomRight: Radius.circular(bottomRight),
     );
 
@@ -58,7 +58,7 @@ class MessageBubbleMy extends StatelessWidget {
                 borderRadius: borderRadius,
                 child: Ink(
                   decoration: BoxDecoration(
-                    color: chat.bubbleMine,
+                    color: const Color(0xFF00FF7F),
                     borderRadius: borderRadius,
                     border: Border.all(
                       color: scheme.primary.withValues(alpha: 0.14),
@@ -72,25 +72,31 @@ class MessageBubbleMy extends StatelessWidget {
                     ],
                   ),
                   child: Container(
-                    constraints: const BoxConstraints(minWidth: 104),
+                    constraints: const BoxConstraints(minWidth: 74),
                     padding: const EdgeInsets.fromLTRB(14, 11, 12, 9),
                     child: Stack(
                       clipBehavior: Clip.none,
                       children: [
-                        Padding(
-                          padding: const EdgeInsets.only(right: 58, bottom: 16),
-                          child: Text(
-                            message.text,
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 15,
-                              height: 1.38,
-                              color: chat.onBubbleMine,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              message.text,
+                              textAlign: TextAlign.right,
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 15,
+                                height: 1.38,
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF00461E),
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 16), // Отступ для статуса
+                          ],
                         ),
                         Positioned(
-                          right: -4,
+                          right: -8,
                           bottom: -6,
                           child: _buildStatusIndicator(context),
                         ),
@@ -110,16 +116,17 @@ class MessageBubbleMy extends StatelessWidget {
     final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
 
+    // Ваши цвета
+    const Color textColor = Color(0xFF00461E);
+    const Color iconColor = Color(0xFF006633);
+    const Color iconReadColor = Color(0xFF008844);
+
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           dateFormat.format(message.createdAt),
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 10,
-            color: chat.metaMuted,
-          ),
+          style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: textColor),
         ),
         if (message.editedAt != null) ...[
           const SizedBox(width: 4),
@@ -128,7 +135,7 @@ class MessageBubbleMy extends StatelessWidget {
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 9,
-              color: chat.metaMuted,
+              color: textColor,
               fontStyle: FontStyle.italic,
             ),
           ),
@@ -140,15 +147,19 @@ class MessageBubbleMy extends StatelessWidget {
             height: 12,
             child: CircularProgressIndicator(
               strokeWidth: 1.5,
-              color: scheme.primary,
+              color: iconColor,
             ),
           )
         else if (isSent && message.isViewed)
-          Icon(Icons.done_all_rounded, size: 15, color: scheme.tertiary)
+          Icon(Icons.done_all_rounded, size: 15, color: iconReadColor)
         else if (isSent)
-          Icon(Icons.check_rounded, size: 14, color: scheme.primary)
+          Icon(Icons.check_rounded, size: 14, color: iconColor)
         else
-          Icon(Icons.error_outline_rounded, size: 14, color: scheme.error),
+          Icon(
+            Icons.error_outline_rounded,
+            size: 14,
+            color: Colors.red.shade400,
+          ),
       ],
     );
   }

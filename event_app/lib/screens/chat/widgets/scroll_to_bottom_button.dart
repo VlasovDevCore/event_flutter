@@ -40,13 +40,10 @@ class ScrollToBottomButton extends StatelessWidget {
 
   Widget _buildButton(BuildContext context) {
     final chat = EventChatTheme.of(context);
-    final scheme = Theme.of(context).colorScheme;
 
     return Material(
-      color: chat.floatingControlFill,
-      elevation: 4,
-      shadowColor: Colors.black.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(22),
+      color: Colors.transparent, // Прозрачный фон
+      elevation: 0,
       child: InkWell(
         onTap: bloc.scrollToBottom,
         borderRadius: BorderRadius.circular(22),
@@ -54,13 +51,20 @@ class ScrollToBottomButton extends StatelessWidget {
           width: 44,
           height: 44,
           decoration: BoxDecoration(
+            color: Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(22),
-            border: Border.all(color: chat.floatingControlBorder),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.2),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
           child: Icon(
             Icons.keyboard_arrow_down_rounded,
-            color: scheme.primary,
-            size: 26,
+            color: Colors.white, // Черная иконка
+            size: 28,
           ),
         ),
       ),
@@ -68,7 +72,6 @@ class ScrollToBottomButton extends StatelessWidget {
   }
 
   Widget _buildBadge(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final count = bloc.pendingNewMessagesCount;
 
     return Positioned(
@@ -78,21 +81,25 @@ class ScrollToBottomButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
         constraints: const BoxConstraints(minWidth: 20, minHeight: 18),
         decoration: BoxDecoration(
-          color: scheme.error,
+          color: Colors.white, // Белый фон
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: scheme.surface,
-            width: 1.5,
-          ),
+          border: Border.all(color: Colors.white, width: 1.5),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.1),
+              blurRadius: 4,
+              offset: const Offset(0, 1),
+            ),
+          ],
         ),
         alignment: Alignment.center,
         child: Text(
           count > 99 ? '99+' : '$count',
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: scheme.onError,
+            color: Colors.black, // Черный текст
             height: 1.1,
           ),
         ),

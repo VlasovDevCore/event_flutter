@@ -11,8 +11,10 @@ class MessageBubbleOther extends StatelessWidget {
   final bool isFirstInGroup;
   final bool isLastInGroup;
   final bool isOrganizer;
+
   /// Действия организатора (удалить и т.д.)
   final ValueChanged<Offset> onOrganizerActionRequested;
+
   /// Копирование для обычного участника (не организатор)
   final VoidCallback onCopyTap;
 
@@ -35,13 +37,13 @@ class MessageBubbleOther extends StatelessWidget {
     final showAvatar = isLastInGroup;
     Offset? lastDown;
 
-    final topLeft = isFirstInGroup ? 18.0 : 6.0;
-    final bottomLeft = isLastInGroup ? 18.0 : 6.0;
+    final topLeft = isFirstInGroup ? 12.0 : 4.0;
+    final bottomLeft = isLastInGroup ? 12.0 : 4.0;
     final borderRadius = BorderRadius.only(
       topLeft: Radius.circular(topLeft),
-      topRight: const Radius.circular(18),
+      topRight: const Radius.circular(12),
       bottomLeft: Radius.circular(bottomLeft),
-      bottomRight: const Radius.circular(18),
+      bottomRight: const Radius.circular(12),
     );
 
     final bubbleContent = Container(
@@ -51,9 +53,8 @@ class MessageBubbleOther extends StatelessWidget {
       ),
       padding: const EdgeInsets.fromLTRB(14, 11, 12, 9),
       decoration: BoxDecoration(
-        color: chat.bubbleOther,
+        color: const Color(0xFF1A1A1A),
         borderRadius: borderRadius,
-        border: Border.all(color: chat.bubbleOtherBorder),
         boxShadow: [
           BoxShadow(
             color: chat.shadowSoft,
@@ -62,22 +63,24 @@ class MessageBubbleOther extends StatelessWidget {
           ),
         ],
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          Padding(
-            padding: const EdgeInsets.only(right: 44, bottom: 5),
-            child: Text(
-              message.text,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 15,
-                height: 1.38,
-                color: chat.onBubbleOther,
-              ),
+          // Текст сообщения
+          Text(
+            message.text,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 15,
+              height: 1.38,
+              fontWeight: FontWeight.w500,
+              color: Color(0xFFFFFFFF),
             ),
           ),
-          Positioned(right: 0, bottom: 0, child: _buildTimeStamp(context)),
+          const SizedBox(height: 4), // Отступ между текстом и временем
+          // Время и статус
+          _buildTimeStamp(context),
         ],
       ),
     );
@@ -112,10 +115,7 @@ class MessageBubbleOther extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showName) _buildName(context),
-              bubble,
-            ],
+            children: [if (showName) _buildName(context), bubble],
           ),
         ),
       ],
@@ -132,7 +132,7 @@ class MessageBubbleOther extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.35),
+          color: const Color(0xFFABABAB).withValues(alpha: 0.35),
           width: 1.5,
         ),
         boxShadow: [
@@ -154,30 +154,35 @@ class MessageBubbleOther extends StatelessWidget {
                     height: 16,
                     child: CircularProgressIndicator(
                       strokeWidth: 1.5,
-                      color: scheme.primary,
+                      color: const Color(0xFFABABAB),
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) =>
-                    Icon(Icons.person_rounded, size: 20, color: scheme.onSurfaceVariant),
+                errorWidget: (context, url, error) => Icon(
+                  Icons.person_rounded,
+                  size: 20,
+                  color: const Color(0xFFABABAB),
+                ),
               )
-            : Icon(Icons.person_rounded, size: 20, color: scheme.onSurfaceVariant),
+            : Icon(
+                Icons.person_rounded,
+                size: 20,
+                color: const Color(0xFFABABAB),
+              ),
       ),
     );
   }
 
   Widget _buildName(BuildContext context) {
-    final chat = EventChatTheme.of(context);
-
     return Padding(
       padding: const EdgeInsets.only(left: 8, bottom: 5),
       child: Text(
         message.displayName,
-        style: TextStyle(
+        style: const TextStyle(
           fontFamily: 'Inter',
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          color: chat.senderName,
+          color: Color(0xFFABABAB),
           letterSpacing: 0.15,
         ),
       ),
@@ -185,27 +190,25 @@ class MessageBubbleOther extends StatelessWidget {
   }
 
   Widget _buildTimeStamp(BuildContext context) {
-    final chat = EventChatTheme.of(context);
-
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           dateFormat.format(message.createdAt),
-          style: TextStyle(
+          style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 10,
-            color: chat.metaMuted,
+            color: Color(0xFFABABAB),
           ),
         ),
         if (message.editedAt != null) ...[
           const SizedBox(width: 4),
-          Text(
+          const Text(
             'ред.',
             style: TextStyle(
               fontFamily: 'Inter',
               fontSize: 9,
-              color: chat.metaMuted,
+              color: Color(0xFFABABAB),
               fontStyle: FontStyle.italic,
             ),
           ),
