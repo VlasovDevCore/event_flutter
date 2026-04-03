@@ -47,7 +47,6 @@ class ChatBody extends StatelessWidget {
           return _buildErrorWidget(context);
         }
 
-        final chat = EventChatTheme.of(context);
         return Container(
           color: const Color(0xFF161616),  // ← сплошной цвет
           child: Stack(

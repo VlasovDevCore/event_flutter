@@ -3,30 +3,44 @@ import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import '../bloc/chat_bloc.dart';
 import '../chat_appearance.dart';
 import 'editing_banner.dart';
+import 'reply_banner.dart';
 
 class ChatInput extends StatelessWidget {
   final ChatBloc bloc;
 
   const ChatInput({super.key, required this.bloc});
 
+  /// Высота плавающей панели снизу (для отступа reverse-списка и кнопки «вниз»).
+  static double overlayReserveHeight(BuildContext context, ChatBloc bloc) {
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    var h = safeBottom + 8 + 10;
+    if (bloc.editingMessageId != null) {
+      h += 58;
+    }
+    if (bloc.replyingToMessage != null) {
+      h += 58;
+    }
+    h += 52;
+    if (bloc.emojiPickerVisible && bloc.error == null) {
+      h += 8 + 256;
+    }
+    return h;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final chat = EventChatTheme.of(context);
-
     return ListenableBuilder(
       listenable: bloc,
       builder: (context, _) {
         return SafeArea(
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF161616),
-            ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (bloc.editingMessageId != null) EditingBanner(bloc: bloc),
+                if (bloc.replyingToMessage != null) ReplyBanner(bloc: bloc),
 
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -48,7 +62,6 @@ class ChatInput extends StatelessWidget {
   }
 
   Widget _buildTextField(BuildContext context) {
-    final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final disabled = bloc.error != null;
 
@@ -76,7 +89,7 @@ class ChatInput extends StatelessWidget {
           color: scheme.onSurfaceVariant.withValues(alpha: 0.75),
         ),
         filled: true,
-        fillColor: chat.inputField,
+        fillColor: const Color(0xFF2A2A2A),
         suffixIcon: IconButton(
           icon: Icon(
             bloc.emojiPickerVisible
@@ -89,22 +102,24 @@ class ChatInput extends StatelessWidget {
           ),
           onPressed: disabled ? null : bloc.toggleEmojiPicker,
         ),
-        suffixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
+        suffixIconConstraints: const BoxConstraints(
+          minWidth: 44,
+          minHeight: 44,
+        ),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.22),
-          ),
+          borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.45)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.18),
-          ),
+          borderSide: BorderSide(color: scheme.outline.withValues(alpha: 0.38)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.65)),
+          borderSide: BorderSide(
+            color: scheme.primary.withValues(alpha: 0.85),
+            width: 1.5,
+          ),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 18,
@@ -124,9 +139,7 @@ class ChatInput extends StatelessWidget {
         : Icons.send_rounded;
 
     return Material(
-      color: disabled
-          ? Colors.white.withValues(alpha: 0.5)
-          : Colors.white,
+      color: disabled ? Colors.white.withValues(alpha: 0.5) : Colors.white,
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: disabled ? null : bloc.sendMessage,

@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:socket_io_client/socket_io_client.dart' as io;
 import '../../../models/event.dart';
@@ -23,12 +22,47 @@ class ChatBloc extends ChangeNotifier {
   int pendingNewMessagesCount = 0;
   final List<EventMessage> _bufferedNewMessages = [];
   String? editingMessageId;
+  /// Сообщение, на которое отвечаем (превью над полем ввода).
+  EventMessage? replyingToMessage;
   bool emojiPickerVisible = false;
   String? lastMarkedViewUpToId;
   final Set<String> processedIds = {};
   final Map<String, bool> sendingStatus = {};
   final Map<String, bool> sentStatus = {};
   final Set<String> tempIds = {};
+
+  /// Якоря строк списка для [Scrollable.ensureVisible] (переход к цитируемому сообщению).
+  final Map<String, GlobalKey> _messageRowKeys = {};
+
+  GlobalKey keyForMessage(String messageId) =>
+      _messageRowKeys.putIfAbsent(messageId, GlobalKey.new);
+
+  void _pruneMessageKeys() {
+    final ids = messages.map((m) => m.id).toSet();
+    _messageRowKeys.removeWhere((id, _) => !ids.contains(id));
+  }
+
+  /// Краткая подсветка сообщения после перехода по цитате ответа.
+  String? jumpHighlightedMessageId;
+  Timer? _jumpHighlightTimer;
+
+  void _flashJumpHighlight(String messageId) {
+    _jumpHighlightTimer?.cancel();
+    jumpHighlightedMessageId = messageId;
+    notifyListeners();
+    _jumpHighlightTimer = Timer(const Duration(milliseconds: 2000), () {
+      jumpHighlightedMessageId = null;
+      notifyListeners();
+    });
+  }
+
+  void _clearJumpHighlightIfMessageRemoved(String messageId) {
+    if (jumpHighlightedMessageId == messageId) {
+      _jumpHighlightTimer?.cancel();
+      jumpHighlightedMessageId = null;
+      notifyListeners();
+    }
+  }
 
   final TextEditingController textController = TextEditingController();
   final FocusNode inputFocusNode = FocusNode();
@@ -38,6 +72,8 @@ class ChatBloc extends ChangeNotifier {
   Function(Offset, EventMessage, bool)? onShowMyMessageActions;
   Function(Offset, EventMessage)? onShowOrganizerMessageActions;
   Function(String)? onShowError;
+  /// Меню «Копировать» для чужих сообщений (якорь — низ пузыря в глобальных координатах).
+  Function(Offset anchorGlobalPosition, EventMessage msg)? onShowCopyMenu;
 
   static const double scrollToBottomThresholdPx = 140;
 
@@ -77,6 +113,8 @@ class ChatBloc extends ChangeNotifier {
       for (final msg in messages) {
         processedIds.add(msg.id);
       }
+
+      _pruneMessageKeys();
 
       loading = false;
       notifyListeners();
@@ -208,6 +246,22 @@ class ChatBloc extends ChangeNotifier {
     await _sendNewMessage(text);
   }
 
+  void startReplyTo(EventMessage msg) {
+    editingMessageId = null;
+    replyingToMessage = msg;
+    textController.clear();
+    emojiPickerVisible = false;
+    notifyListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      inputFocusNode.requestFocus();
+    });
+  }
+
+  void cancelReply() {
+    replyingToMessage = null;
+    notifyListeners();
+  }
+
   Future<void> _updateMessage(String text) async {
     final editingId = editingMessageId!;
     final idx = messages.indexWhere((m) => m.id == editingId);
@@ -239,6 +293,11 @@ class ChatBloc extends ChangeNotifier {
     final tempId = 'temp_${DateTime.now().millisecondsSinceEpoch}';
     tempIds.add(tempId);
 
+    final replySnap = replyingToMessage;
+    final replyToIdForApi = replySnap != null && !replySnap.id.startsWith('temp_')
+        ? replySnap.id
+        : null;
+
     final tempMessage = EventMessage(
       id: tempId,
       text: text,
@@ -246,19 +305,30 @@ class ChatBloc extends ChangeNotifier {
       userDisplayName: null,
       createdAt: DateTime.now(),
       userId: myId,
+      replyToId: replySnap?.id,
+      replyToText: replySnap?.text,
+      replyToAuthorName: replySnap?.displayName,
+      replyToAuthorEmail:
+          replySnap != null && replySnap.userEmail.isNotEmpty
+              ? replySnap.userEmail
+              : null,
     );
 
     messages = [...messages, tempMessage];
     sendingStatus[tempId] = true;
     sentStatus[tempId] = false;
     emojiPickerVisible = false;
+    replyingToMessage = null;
     textController.clear();
     notifyListeners();
 
     _scrollToEnd();
 
     try {
-      final realMessage = await _repository.sendMessage(text);
+      final realMessage = await _repository.sendMessage(
+        text,
+        replyToId: replyToIdForApi,
+      );
       processedIds.add(realMessage.id);
 
       final index = messages.indexWhere((m) => m.id == tempId);
@@ -282,10 +352,12 @@ class ChatBloc extends ChangeNotifier {
           : 'Не удалось отправить сообщение';
       onShowError?.call(errorMsg);
       textController.text = text;
+      replyingToMessage = replySnap;
     }
   }
 
   void startEditingMessage(EventMessage msg) {
+    replyingToMessage = null;
     editingMessageId = msg.id;
     textController.text = msg.text;
     textController.selection = TextSelection.fromPosition(
@@ -300,6 +372,7 @@ class ChatBloc extends ChangeNotifier {
 
   void cancelEditing() {
     editingMessageId = null;
+    replyingToMessage = null;
     textController.clear();
     emojiPickerVisible = false;
     notifyListeners();
@@ -318,6 +391,8 @@ class ChatBloc extends ChangeNotifier {
       sendingStatus.remove(msg.id);
       sentStatus.remove(msg.id);
       tempIds.remove(msg.id);
+      _clearJumpHighlightIfMessageRemoved(msg.id);
+      _pruneMessageKeys();
       notifyListeners();
       return;
     }
@@ -325,15 +400,83 @@ class ChatBloc extends ChangeNotifier {
     try {
       await _repository.deleteMessage(msg.id);
       messages.removeWhere((m) => m.id == msg.id);
+      _clearJumpHighlightIfMessageRemoved(msg.id);
+      _pruneMessageKeys();
       notifyListeners();
     } catch (e) {
       onShowError?.call('Не удалось удалить сообщение');
     }
   }
 
-  void copyMessage(String text) {
-    Clipboard.setData(ClipboardData(text: text));
-    onShowError?.call('Скопировано');
+  void showCopyMenuForMessage(
+    Offset anchorGlobalPosition,
+    EventMessage msg,
+  ) {
+    onShowCopyMenu?.call(anchorGlobalPosition, msg);
+  }
+
+  /// Прокрутка к исходному сообщению по тапу на превью ответа.
+  Future<void> scrollToRepliedMessage(String? replyToId) async {
+    if (replyToId == null || replyToId.isEmpty) return;
+    _pruneMessageKeys();
+    final ki = messages.indexWhere((m) => m.id == replyToId);
+    if (ki == -1) return;
+
+    final key = keyForMessage(replyToId);
+
+    Future<void> tryEnsure() async {
+      final ctx = key.currentContext;
+      if (ctx == null) return;
+      await Scrollable.ensureVisible(
+        ctx,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+        alignment: 0.32,
+      );
+    }
+
+    await tryEnsure();
+    if (key.currentContext != null) {
+      _flashJumpHighlight(replyToId);
+      return;
+    }
+
+    final sc = scrollController;
+    if (!sc.hasClients) return;
+    final max = sc.position.maxScrollExtent;
+    final len = messages.length;
+    if (len <= 1) {
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      await tryEnsure();
+      if (key.currentContext != null) {
+        _flashJumpHighlight(replyToId);
+      }
+      return;
+    }
+
+    final t = (len - 1 - ki) / (len - 1);
+    await sc.animateTo(
+      (max * t).clamp(0.0, max),
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOut,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 70));
+    await tryEnsure();
+    if (key.currentContext != null) {
+      _flashJumpHighlight(replyToId);
+      return;
+    }
+
+    await sc.animateTo(
+      (max * (t * 0.92 + 0.04)).clamp(0.0, max),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 70));
+    await tryEnsure();
+    if (key.currentContext != null) {
+      _flashJumpHighlight(replyToId);
+    }
   }
 
   void toggleEmojiPicker() {
@@ -486,6 +629,7 @@ class ChatBloc extends ChangeNotifier {
 
     final id = map['id'] as String?;
     if (id != null) {
+      _clearJumpHighlightIfMessageRemoved(id);
       messages.removeWhere((m) => m.id == id);
       final before = _bufferedNewMessages.length;
       _bufferedNewMessages.removeWhere((m) => m.id == id);
@@ -498,6 +642,7 @@ class ChatBloc extends ChangeNotifier {
 
   @override
   void dispose() {
+    _jumpHighlightTimer?.cancel();
     socket?.emit('leaveEvent', event.id);
     socket?.disconnect();
     socket?.dispose();

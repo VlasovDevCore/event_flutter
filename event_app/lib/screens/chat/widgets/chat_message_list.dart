@@ -3,11 +3,15 @@ import 'package:intl/intl.dart';
 import '../../../models/event_message.dart';
 import '../bloc/chat_bloc.dart';
 import '../chat_appearance.dart';
+import 'chat_input.dart';
 import 'message_bubble_my.dart';
 import 'message_bubble_other.dart';
 
 class ChatMessageList extends StatelessWidget {
   final ChatBloc bloc;
+
+  /// Визуальный зазор между последними сообщениями и низом экрана (над панелью ввода).
+  static const double messageBottomGap = 12;
 
   const ChatMessageList({super.key, required this.bloc});
 
@@ -19,52 +23,79 @@ class ChatMessageList extends StatelessWidget {
 
     final n = renderItems.length;
 
-    return ListView.builder(
-      controller: bloc.scrollController,
-      reverse: true,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      itemCount: n,
-      itemBuilder: (context, index) {
-        final item = renderItems[n - 1 - index];
+    return ListenableBuilder(
+      listenable: bloc,
+      builder: (context, _) {
+        final inputAreaHeight =
+            ChatInput.overlayReserveHeight(context, bloc) + messageBottomGap;
 
-        if (item is DateTime) {
-          return _buildDayDivider(item);
-        }
+        return ListView.builder(
+          controller: bloc.scrollController,
+          reverse: true,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          itemCount: n + 1,
+          itemBuilder: (context, index) {
+            // При reverse: index 0 — у нижнего края, под ним «виртуальное» место под панель ввода.
+            if (index == 0) {
+              return SizedBox(
+                key: const ValueKey('chat_input_area_spacer'),
+                height: inputAreaHeight,
+                width: double.infinity,
+              );
+            }
 
-        final msgIndex = item as int;
-        final msg = messages[msgIndex];
-        final isMe = bloc.myId != null && msg.userId == bloc.myId;
+            final item = renderItems[n - index];
 
-        // При reverse: первое в группе по времени — сверху визуально → отступ сверху
-        final gapTop = _isFirstInGroup(messages, msgIndex) ? 10.0 : 4.0;
-        Widget bubble;
-        if (isMe) {
-          bubble = MessageBubbleMy(
-            message: msg,
-            dateFormat: dateFormat,
-            isSending: bloc.sendingStatus[msg.id] ?? false,
-            isSent: bloc.sentStatus[msg.id] ?? true,
-            isFirstInGroup: _isFirstInGroup(messages, msgIndex),
-            isLastInGroup: _isLastInGroup(messages, msgIndex),
-            onActionRequested: (pos) => bloc.showMyMessageActions(pos, msg),
-          );
-        } else {
-          bubble = MessageBubbleOther(
-            message: msg,
-            dateFormat: dateFormat,
-            isFirstInGroup: _isFirstInGroup(messages, msgIndex),
-            isLastInGroup: _isLastInGroup(messages, msgIndex),
-            isOrganizer: bloc.isOrganizer,
-            onOrganizerActionRequested: (pos) =>
-                bloc.showOrganizerMessageActions(pos, msg),
-            onCopyTap: () => bloc.copyMessage(msg.text),
-          );
-        }
+            if (item is DateTime) {
+              return _buildDayDivider(item);
+            }
 
-        return Padding(
-          key: ValueKey(msg.id), // 👈 ВОТ СЮДА ДОБАВЬ КЛЮЧ
-          padding: EdgeInsets.only(top: gapTop),
-          child: bubble,
+            final msgIndex = item as int;
+            final msg = messages[msgIndex];
+            final isMe = bloc.myId != null && msg.userId == bloc.myId;
+
+            // При reverse: первое в группе по времени — сверху визуально → отступ сверху
+            final gapTop = _isFirstInGroup(messages, msgIndex) ? 10.0 : 4.0;
+            Widget bubble;
+            final jumpHl = bloc.jumpHighlightedMessageId == msg.id;
+
+            if (isMe) {
+              bubble = MessageBubbleMy(
+                message: msg,
+                dateFormat: dateFormat,
+                isSending: bloc.sendingStatus[msg.id] ?? false,
+                isSent: bloc.sentStatus[msg.id] ?? true,
+                isFirstInGroup: _isFirstInGroup(messages, msgIndex),
+                isLastInGroup: _isLastInGroup(messages, msgIndex),
+                onActionRequested: (pos) => bloc.showMyMessageActions(pos, msg),
+                onReplyQuoteTap: msg.replyToId != null
+                    ? () => bloc.scrollToRepliedMessage(msg.replyToId)
+                    : null,
+                isJumpHighlighted: jumpHl,
+              );
+            } else {
+              bubble = MessageBubbleOther(
+                message: msg,
+                dateFormat: dateFormat,
+                isFirstInGroup: _isFirstInGroup(messages, msgIndex),
+                isLastInGroup: _isLastInGroup(messages, msgIndex),
+                isOrganizer: bloc.isOrganizer,
+                onOrganizerActionRequested: (pos) =>
+                    bloc.showOrganizerMessageActions(pos, msg),
+                onCopyTap: (anchor) => bloc.showCopyMenuForMessage(anchor, msg),
+                onReplyQuoteTap: msg.replyToId != null
+                    ? () => bloc.scrollToRepliedMessage(msg.replyToId)
+                    : null,
+                isJumpHighlighted: jumpHl,
+              );
+            }
+
+            return Padding(
+              key: bloc.keyForMessage(msg.id),
+              padding: EdgeInsets.only(top: gapTop),
+              child: bubble,
+            );
+          },
         );
       },
     );

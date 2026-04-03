@@ -502,12 +502,22 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
 router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   const { id: eventId } = req.params;
   const userId = req.user?.id;
-  const { text } = req.body as { text?: string };
+  const { text, reply_to_id: replyToIdRaw } = req.body as {
+    text?: string;
+    reply_to_id?: string | null;
+  };
   if (!userId) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (!text || typeof text !== 'string' || text.trim() === '') {
     return res.status(400).json({ error: 'Текст сообщения обязателен' });
+  }
+  let replyToId: string | null = null;
+  if (replyToIdRaw != null && replyToIdRaw !== '') {
+    if (typeof replyToIdRaw !== 'string') {
+      return res.status(400).json({ error: 'Некорректный reply_to_id' });
+    }
+    replyToId = replyToIdRaw;
   }
   const client = await pool.connect();
   try {
@@ -518,25 +528,44 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
     if (participant.rowCount === 0) {
       return res.status(403).json({ error: 'Вы не участвуете в этом событии' });
     }
+    if (replyToId) {
+      const anchor = await client.query(
+        `SELECT 1 FROM event_messages WHERE id = $1 AND event_id = $2`,
+        [replyToId, eventId],
+      );
+      if (anchor.rowCount === 0) {
+        return res.status(400).json({ error: 'Сообщение для ответа не найдено' });
+      }
+    }
     const result = await client.query(
       `
-      INSERT INTO event_messages (event_id, user_id, text)
-      VALUES ($1, $2, $3)
-      RETURNING id, event_id, user_id, text, created_at, edited_at
+      WITH ins AS (
+        INSERT INTO event_messages (event_id, user_id, text, reply_to_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING *
+      )
+      SELECT ins.id,
+             ins.event_id,
+             ins.user_id,
+             ins.text,
+             ins.created_at,
+             ins.edited_at,
+             ins.reply_to_id,
+             u.email AS user_email,
+             u.display_name AS user_display_name,
+             u.avatar_url AS avatar_url,
+             reply_msg.text AS reply_to_text,
+             ru.display_name AS reply_to_author_name,
+             ru.email AS reply_to_author_email
+      FROM ins
+      LEFT JOIN users u ON u.id = ins.user_id
+      LEFT JOIN event_messages reply_msg ON reply_msg.id = ins.reply_to_id
+      LEFT JOIN users ru ON ru.id = reply_msg.user_id
       `,
-      [eventId, userId, text.trim()],
+      [eventId, userId, text.trim(), replyToId],
     );
     const row = result.rows[0] as Record<string, unknown>;
-    
-    // ✅ ДОБАВЛЯЕМ ПОЛУЧЕНИЕ АВАТАРКИ
-    const userRow = await client.query(
-      'SELECT email, display_name, avatar_url FROM users WHERE id = $1', 
-      [userId]
-    );
-    
-    (row as Record<string, unknown>).user_email = (userRow.rows[0] as { email: string })?.email ?? null;
-    (row as Record<string, unknown>).user_display_name = (userRow.rows[0] as { display_name: string })?.display_name ?? null;
-    (row as Record<string, unknown>).avatar_url = (userRow.rows[0] as { avatar_url: string })?.avatar_url ?? null;
+    (row as Record<string, unknown>).is_viewed = false;
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
     if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
@@ -642,6 +671,10 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
             m.text,
             m.created_at,
             m.edited_at,
+            m.reply_to_id,
+            reply_msg.text AS reply_to_text,
+            ru.display_name AS reply_to_author_name,
+            ru.email AS reply_to_author_email,
             CASE
               WHEN m.user_id = $2 THEN EXISTS (
                 SELECT 1
@@ -662,6 +695,8 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
             ) AS viewed_at
       FROM event_messages m
       LEFT JOIN users u ON u.id = m.user_id
+      LEFT JOIN event_messages reply_msg ON reply_msg.id = m.reply_to_id
+      LEFT JOIN users ru ON ru.id = reply_msg.user_id
       WHERE m.event_id = $1
       ORDER BY m.created_at ASC
       `,
@@ -697,10 +732,29 @@ router.put('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, 
     }
     const upd = await client.query(
       `
-      UPDATE event_messages
-      SET text = $1, edited_at = now()
-      WHERE id = $2 AND event_id = $3 AND user_id = $4
-      RETURNING id, event_id, user_id, text, created_at, edited_at
+      WITH updated AS (
+        UPDATE event_messages
+        SET text = $1, edited_at = now()
+        WHERE id = $2 AND event_id = $3 AND user_id = $4
+        RETURNING *
+      )
+      SELECT updated.id,
+             updated.event_id,
+             updated.user_id,
+             updated.text,
+             updated.created_at,
+             updated.edited_at,
+             updated.reply_to_id,
+             usr.email AS user_email,
+             usr.display_name AS user_display_name,
+             usr.avatar_url AS avatar_url,
+             reply_msg.text AS reply_to_text,
+             ru.display_name AS reply_to_author_name,
+             ru.email AS reply_to_author_email
+      FROM updated
+      LEFT JOIN users usr ON usr.id = updated.user_id
+      LEFT JOIN event_messages reply_msg ON reply_msg.id = updated.reply_to_id
+      LEFT JOIN users ru ON ru.id = reply_msg.user_id
       `,
       [text.trim(), messageId, eventId, userId],
     );
@@ -708,17 +762,6 @@ router.put('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, 
       return res.status(404).json({ error: 'Сообщение не найдено или не ваше' });
     }
     const row = upd.rows[0] as Record<string, unknown>;
-    const authorId = row.user_id as string;
-    const userRow = await client.query(
-      'SELECT email, display_name, avatar_url FROM users WHERE id = $1',
-      [authorId],
-    );
-    (row as Record<string, unknown>).user_email =
-      (userRow.rows[0] as { email: string })?.email ?? null;
-    (row as Record<string, unknown>).user_display_name =
-      (userRow.rows[0] as { display_name: string })?.display_name ?? null;
-    (row as Record<string, unknown>).avatar_url =
-      (userRow.rows[0] as { avatar_url: string })?.avatar_url ?? null;
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
     if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {

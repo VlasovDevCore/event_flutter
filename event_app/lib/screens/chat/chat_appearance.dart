@@ -29,6 +29,19 @@ class EventChatTheme {
   Color get inputField => _scheme.surfaceContainerHighest;
   Color get inputDivider => _scheme.outline.withValues(alpha: 0.2);
 
+  /// Высота градиента тени под плавающим полем ввода.
+  static const double inputBottomShadowExtent = 120;
+
+  /// Тёмная тень снизу вверх (под полем ввода, поверх ленты сообщений).
+  LinearGradient get inputBottomShadowGradient => LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          Colors.black.withValues(alpha: 1),
+          Colors.black.withValues(alpha: 0),
+        ],
+      );
+
   Color get dayPillBg => _scheme.surfaceContainerHighest.withValues(alpha: 0.55);
   Color get dayPillBorder => _scheme.outline.withValues(alpha: 0.18);
   Color get metaMuted => _scheme.onSurfaceVariant;

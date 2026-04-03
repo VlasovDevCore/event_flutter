@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../bloc/chat_bloc.dart';
 import '../chat_appearance.dart';
+import 'chat_input.dart';
 
 class ScrollToBottomButton extends StatelessWidget {
   final ChatBloc bloc;
@@ -14,10 +15,11 @@ class ScrollToBottomButton extends StatelessWidget {
       builder: (context, _) {
         final visible =
             bloc.showScrollToBottom || bloc.pendingNewMessagesCount > 0;
+        final bottomInset = ChatInput.overlayReserveHeight(context, bloc);
 
         return Positioned(
           right: 14,
-          bottom: 14,
+          bottom: 14 + bottomInset,
           child: AnimatedOpacity(
             opacity: visible ? 1 : 0,
             duration: const Duration(milliseconds: 180),

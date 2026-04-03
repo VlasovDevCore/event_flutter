@@ -4,6 +4,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../models/event_message.dart';
 import '../../../../services/api_client.dart';
 import '../chat_appearance.dart';
+import 'reply_quote.dart';
 
 class MessageBubbleOther extends StatelessWidget {
   final EventMessage message;
@@ -15,8 +16,10 @@ class MessageBubbleOther extends StatelessWidget {
   /// Действия организатора (удалить и т.д.)
   final ValueChanged<Offset> onOrganizerActionRequested;
 
-  /// Копирование для обычного участника (не организатор)
-  final VoidCallback onCopyTap;
+  /// Копирование для обычного участника (не организатор); [Offset] — низ пузыря в глобальных координатах.
+  final ValueChanged<Offset> onCopyTap;
+  final VoidCallback? onReplyQuoteTap;
+  final bool isJumpHighlighted;
 
   const MessageBubbleOther({
     super.key,
@@ -27,6 +30,8 @@ class MessageBubbleOther extends StatelessWidget {
     required this.isOrganizer,
     required this.onOrganizerActionRequested,
     required this.onCopyTap,
+    this.onReplyQuoteTap,
+    this.isJumpHighlighted = false,
   });
 
   @override
@@ -35,7 +40,6 @@ class MessageBubbleOther extends StatelessWidget {
     final fullAvatarUrl = ApiClient.getFullImageUrl(message.avatarUrl);
     final showName = isFirstInGroup;
     final showAvatar = isLastInGroup;
-    Offset? lastDown;
 
     final topLeft = isFirstInGroup ? 12.0 : 4.0;
     final bottomLeft = isLastInGroup ? 12.0 : 4.0;
@@ -46,14 +50,21 @@ class MessageBubbleOther extends StatelessWidget {
       bottomRight: const Radius.circular(12),
     );
 
-    final bubbleContent = Container(
+    const bubbleBase = Color(0xFF1A1A1A);
+    final bubbleFill = isJumpHighlighted
+        ? Color.lerp(bubbleBase, const Color(0xFF3D3D3D), 0.48)!
+        : bubbleBase;
+
+    final bubbleContent = AnimatedContainer(
+      duration: const Duration(milliseconds: 380),
+      curve: Curves.easeOut,
       constraints: BoxConstraints(
         minWidth: 104,
         maxWidth: MediaQuery.of(context).size.width * 0.72,
       ),
       padding: const EdgeInsets.fromLTRB(14, 11, 12, 9),
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: bubbleFill,
         borderRadius: borderRadius,
         boxShadow: [
           BoxShadow(
@@ -63,44 +74,68 @@ class MessageBubbleOther extends StatelessWidget {
           ),
         ],
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Текст сообщения
-          Text(
-            message.text,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 15,
-              height: 1.38,
-              fontWeight: FontWeight.w500,
-              color: Color(0xFFFFFFFF),
+      child: IntrinsicWidth(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (message.replyToId != null &&
+                (message.replyToText != null ||
+                    message.replyQuoteAuthorLabel != null))
+              ReplyQuote(
+                message: message,
+                authorColor: chat.senderName,
+                textColor: const Color(0xFFFFFFFF),
+                borderColor: chat.senderName.withValues(alpha: 0.85),
+                onTap: onReplyQuoteTap,
+              ),
+            // Текст сообщения
+            Text(
+              message.text,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 15,
+                height: 1.38,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFFFFFFFF),
+              ),
             ),
-          ),
-          const SizedBox(height: 4), // Отступ между текстом и временем
-          // Время и статус
-          _buildTimeStamp(context),
-        ],
+            const SizedBox(height: 4), // Отступ между текстом и временем
+            // Время и статус
+            _buildTimeStamp(context),
+          ],
+        ),
       ),
     );
 
-    final onBubbleTap = isOrganizer
-        ? () => onOrganizerActionRequested(lastDown ?? Offset.zero)
-        : onCopyTap;
-    final bubble = Material(
-      color: Colors.transparent,
-      borderRadius: borderRadius,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onBubbleTap,
-        onTapDown: (d) => lastDown = d.globalPosition,
-        onLongPress: isOrganizer
-            ? () => onOrganizerActionRequested(lastDown ?? Offset.zero)
-            : onCopyTap,
-        borderRadius: borderRadius,
-        child: bubbleContent,
-      ),
+    final bubble = Builder(
+      builder: (bubbleContext) {
+        void organizerOpenActions() {
+          final box = bubbleContext.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          onOrganizerActionRequested(
+            box.localToGlobal(Offset(0, box.size.height)),
+          );
+        }
+
+        void participantCopy() {
+          final box = bubbleContext.findRenderObject() as RenderBox?;
+          if (box == null) return;
+          onCopyTap(box.localToGlobal(Offset(0, box.size.height)));
+        }
+
+        return Material(
+          color: Colors.transparent,
+          borderRadius: borderRadius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: isOrganizer ? organizerOpenActions : participantCopy,
+            onLongPress: isOrganizer ? organizerOpenActions : participantCopy,
+            borderRadius: borderRadius,
+            child: bubbleContent,
+          ),
+        );
+      },
     );
 
     return Row(
@@ -109,13 +144,19 @@ class MessageBubbleOther extends StatelessWidget {
         if (showAvatar)
           _buildAvatar(context, fullAvatarUrl)
         else
-          const SizedBox(width: 42),
+          const SizedBox(width: 50),
 
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
-            children: [if (showName) _buildName(context), bubble],
+            children: [
+              if (showName) _buildName(context),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: bubble,
+              ),
+            ],
           ),
         ),
       ],
@@ -123,27 +164,15 @@ class MessageBubbleOther extends StatelessWidget {
   }
 
   Widget _buildAvatar(BuildContext context, String? avatarUrl) {
-    final scheme = Theme.of(context).colorScheme;
-
     return Container(
-      width: 34,
-      height: 34,
+      width: 42,
+      height: 42,
       margin: const EdgeInsets.only(right: 8),
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(
-          color: const Color(0xFFABABAB).withValues(alpha: 0.35),
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.25),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ClipOval(
+      decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(
+          12,
+        ), // должно совпадать со значением выше
         child: avatarUrl != null && avatarUrl.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: avatarUrl,
@@ -158,16 +187,16 @@ class MessageBubbleOther extends StatelessWidget {
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) => Icon(
+                errorWidget: (context, url, error) => const Icon(
                   Icons.person_rounded,
                   size: 20,
-                  color: const Color(0xFFABABAB),
+                  color: Color(0xFFABABAB),
                 ),
               )
-            : Icon(
+            : const Icon(
                 Icons.person_rounded,
                 size: 20,
-                color: const Color(0xFFABABAB),
+                color: Color(0xFFABABAB),
               ),
       ),
     );

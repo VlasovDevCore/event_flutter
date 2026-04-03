@@ -3,41 +3,46 @@ import 'package:flutter/services.dart';
 import '../../../../models/event_message.dart';
 
 class MessageActionsDialog {
-  static RelativeRect _positionFromGlobalOffset(
-    BuildContext context,
-    Offset globalPosition,
-  ) {
-    final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
-    final local = overlay.globalToLocal(globalPosition);
-    final rect = Rect.fromLTWH(local.dx, local.dy, 0, 0);
-    return RelativeRect.fromRect(rect, Offset.zero & overlay.size);
-  }
-
   static Future<String?> _showPopupMenu({
     required BuildContext context,
-    required RelativeRect position,
+    required Offset anchorPosition, // Позиция нижней части сообщения
     required List<PopupMenuEntry<String>> items,
   }) async {
-    final scheme = Theme.of(context).colorScheme;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final screen = Offset.zero & overlay.size;
+    final padding = MediaQuery.paddingOf(context);
 
-    const menuWidth = 240.0;
     const margin = 10.0;
-    const itemExtent = 48.0;
-    const dividerExtent = 1.0;
+    final marginTop = margin + padding.top;
+    final marginBottom = margin + padding.bottom;
 
-    final left0 = position.left;
-    final top0 = position.top;
+    // Меню на всю ширину с отступами по бокам
+    final menuWidth = screen.width - (margin * 2);
+    final left = margin;
 
-    final itemCount = items.whereType<PopupMenuItem<String>>().length;
-    final dividerCount = items.whereType<PopupMenuDivider>().length;
-    final estimatedMenuHeight =
-        itemCount * itemExtent + dividerCount * dividerExtent;
+    // anchor в глобальных координатах → в системе overlay (как у Positioned в диалоге)
+    final anchorInOverlay = overlay.globalToLocal(anchorPosition);
+    final messageBottom = anchorInOverlay.dy;
+    const gapBelowMessage = 8.0;
 
-    final left = left0.clamp(margin, screen.width - menuWidth - margin);
-    final maxTop = (screen.height - estimatedMenuHeight - margin);
-    final top = top0.clamp(margin, maxTop < margin ? margin : maxTop);
+    // Одна строка иконка+текст, vertical padding 16+16 в InkWell — запас на разные шрифты
+    const estimatedMenuHeight = 88.0;
+
+    final maxBottomY = screen.height - marginBottom;
+    final topBelow = messageBottom + gapBelowMessage;
+    final topAbove = messageBottom - gapBelowMessage - estimatedMenuHeight;
+
+    double top;
+    if (topBelow + estimatedMenuHeight <= maxBottomY) {
+      top = topBelow;
+    } else if (topAbove >= marginTop) {
+      // Не помещается снизу — показываем над пузырём
+      top = topAbove;
+    } else {
+      // Ни над, ни под пузырём с отступами — прижимаем к низу safe area
+      final pinnedUp = maxBottomY - estimatedMenuHeight;
+      top = pinnedUp < marginTop ? marginTop : pinnedUp;
+    }
 
     return showGeneralDialog<String>(
       context: context,
@@ -58,41 +63,40 @@ class MessageActionsDialog {
               top: top,
               width: menuWidth,
               child: Material(
-                color: scheme.surfaceContainerHigh,
+                color: const Color(0xFF25262B),
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(
+                    20,
+                  ), // Увеличенное скругление
                 ),
                 elevation: 10,
-                child: Column(
+                child: Row(
                   mainAxisSize: MainAxisSize.min,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    for (final entry in items)
-                      if (entry is PopupMenuItem<String>)
-                        InkWell(
-                          onTap: () => Navigator.of(ctx).pop(entry.value),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            child: DefaultTextStyle(
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: scheme.onSurface,
-                                fontWeight: FontWeight.w500,
+                    for (int i = 0; i < items.length; i++)
+                      if (items[i] is PopupMenuItem<String>)
+                        Expanded(
+                          child: InkWell(
+                            onTap: () => Navigator.of(
+                              ctx,
+                            ).pop((items[i] as PopupMenuItem<String>).value),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical:
+                                    16, // Увеличенный отступ сверху и снизу
                               ),
-                              child: IconTheme(
-                                data: IconThemeData(
-                                  color: scheme.primary,
-                                  size: 20,
-                                ),
-                                child: entry.child ?? const SizedBox.shrink(),
-                              ),
+                              child: (items[i] as PopupMenuItem<String>).child,
                             ),
                           ),
                         )
-                      else if (entry is PopupMenuDivider)
-                        const Divider(height: 1),
+                      else if (items[i] is PopupMenuDivider)
+                        Container(
+                          width: 1,
+                          height: 40, // Высота разделителя
+                          color: Colors.white.withOpacity(0.1),
+                        ),
                   ],
                 ),
               ),
@@ -103,57 +107,125 @@ class MessageActionsDialog {
     );
   }
 
+  /// Меню для чужого сообщения (не организатор): копировать и ответить.
+  static void showParticipantMessageActions(
+    BuildContext context,
+    Offset messageBottomGlobal,
+    EventMessage message,
+    VoidCallback onReply,
+  ) {
+    final scheme = Theme.of(context).colorScheme;
+
+    _showPopupMenu(
+      context: context,
+      anchorPosition: messageBottomGlobal,
+      items: [
+        PopupMenuItem<String>(
+          value: 'copy',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              const SizedBox(height: 6),
+              const Text('Копировать', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'reply',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+              const SizedBox(height: 6),
+              const Text('Ответить', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+      ],
+    ).then((value) {
+      if (value == 'copy') {
+        Clipboard.setData(ClipboardData(text: message.text));
+      } else if (value == 'reply') {
+        onReply();
+      }
+    });
+  }
+
   static void showMyMessageActions(
     BuildContext context,
-    Offset anchorGlobalPosition,
+    Offset messageBottomGlobal,
     EventMessage message,
     bool isSending,
     VoidCallback onEdit,
     VoidCallback onDelete,
+    VoidCallback onReply,
   ) {
     final scheme = Theme.of(context).colorScheme;
     final isTemp = message.id.startsWith('temp_');
     final canEdit = !isTemp && !isSending;
     final canDelete = isTemp || (!isTemp && !isSending);
 
-    final position = _positionFromGlobalOffset(context, anchorGlobalPosition);
-
     _showPopupMenu(
       context: context,
-      position: position,
+      anchorPosition: messageBottomGlobal,
       items: [
         PopupMenuItem<String>(
           value: 'copy',
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 20),
-              const SizedBox(width: 10),
-              const Text('Скопировать'),
+              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              const SizedBox(height: 6),
+              const Text('Копировать', style: TextStyle(fontSize: 12)),
             ],
           ),
         ),
-        if (canEdit)
+        const PopupMenuDivider(),
+        if (!isTemp) ...[
           PopupMenuItem<String>(
-            value: 'edit',
-            child: Row(
+            value: 'reply',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.edit_outlined, color: scheme.primary, size: 20),
-                const SizedBox(width: 10),
-                const Text('Изменить'),
+                Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+                const SizedBox(height: 6),
+                const Text('Ответить', style: TextStyle(fontSize: 12)),
               ],
             ),
           ),
+          const PopupMenuDivider(),
+        ],
+        if (canEdit) ...[
+          PopupMenuItem<String>(
+            value: 'edit',
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.edit_outlined, color: scheme.primary, size: 24),
+                const SizedBox(height: 6),
+                const Text('Изменить', style: TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+          const PopupMenuDivider(),
+        ],
         if (canDelete)
           PopupMenuItem<String>(
             value: 'delete',
-            child: Row(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.delete_outline_rounded,
-                    color: scheme.error, size: 20),
-                const SizedBox(width: 10),
+                Icon(
+                  Icons.delete_outline_rounded,
+                  color: scheme.error,
+                  size: 24,
+                ),
+                const SizedBox(height: 6),
                 Text(
                   'Удалить',
-                  style: TextStyle(color: scheme.error),
+                  style: TextStyle(color: scheme.error, fontSize: 12),
                 ),
               ],
             ),
@@ -164,6 +236,9 @@ class MessageActionsDialog {
       switch (value) {
         case 'copy':
           Clipboard.setData(ClipboardData(text: message.text));
+          break;
+        case 'reply':
+          onReply();
           break;
         case 'edit':
           onEdit();
@@ -177,38 +252,51 @@ class MessageActionsDialog {
 
   static void showOrganizerOtherMessageActions(
     BuildContext context,
-    Offset anchorGlobalPosition,
+    Offset messageBottomGlobal,
     EventMessage message,
     VoidCallback onDelete,
+    VoidCallback onReply,
   ) {
     final scheme = Theme.of(context).colorScheme;
 
-    final position = _positionFromGlobalOffset(context, anchorGlobalPosition);
-
     _showPopupMenu(
       context: context,
-      position: position,
+      anchorPosition: messageBottomGlobal,
       items: [
         PopupMenuItem<String>(
           value: 'copy',
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 20),
-              const SizedBox(width: 10),
-              const Text('Скопировать'),
+              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              const SizedBox(height: 6),
+              const Text('Копировать', style: TextStyle(fontSize: 12)),
             ],
           ),
         ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'reply',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+              const SizedBox(height: 6),
+              const Text('Ответить', style: TextStyle(fontSize: 12)),
+            ],
+          ),
+        ),
+        const PopupMenuDivider(),
         PopupMenuItem<String>(
           value: 'delete',
-          child: Row(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_outline_rounded,
-                  color: scheme.error, size: 20),
-              const SizedBox(width: 10),
+              Icon(Icons.delete_outline_rounded, color: scheme.error, size: 24),
+              const SizedBox(height: 6),
               Text(
-                'Удалить сообщение',
-                style: TextStyle(color: scheme.error),
+                'Удалить',
+                style: TextStyle(color: scheme.error, fontSize: 12),
               ),
             ],
           ),
@@ -219,6 +307,9 @@ class MessageActionsDialog {
       switch (value) {
         case 'copy':
           Clipboard.setData(ClipboardData(text: message.text));
+          break;
+        case 'reply':
+          onReply();
           break;
         case 'delete':
           onDelete();
@@ -234,7 +325,7 @@ class MessageActionsDialog {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: scheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: Text(
           'Удалить сообщение?',
           style: TextStyle(

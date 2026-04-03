@@ -33,6 +33,16 @@ class _EventChatScreenState extends State<EventChatScreen> {
     _bloc.onShowMyMessageActions ??= _showMyMessageActions;
     _bloc.onShowOrganizerMessageActions ??= _showOrganizerMessageActions;
     _bloc.onShowError ??= _showToast;
+    _bloc.onShowCopyMenu ??= _showCopyMenu;
+  }
+
+  void _showCopyMenu(Offset anchorGlobalPosition, EventMessage msg) {
+    MessageActionsDialog.showParticipantMessageActions(
+      context,
+      anchorGlobalPosition,
+      msg,
+      () => _bloc.startReplyTo(msg),
+    );
   }
 
   void _showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg, bool isSending) {
@@ -50,6 +60,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
           await _bloc.deleteMessage(msg);
         }
       },
+      () => _bloc.startReplyTo(msg),
     );
   }
 
@@ -66,6 +77,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
           await _bloc.deleteMessage(msg);
         }
       },
+      () => _bloc.startReplyTo(msg),
     );
   }
 
@@ -106,10 +118,29 @@ class _EventChatScreenState extends State<EventChatScreen> {
           _bloc.inputFocusNode.unfocus();
           FocusManager.instance.primaryFocus?.unfocus();
         },
-        child: Column(
+        child: Stack(
+          alignment: Alignment.bottomCenter,
           children: [
-            Expanded(child: ChatBody(bloc: _bloc)),
-            ChatInput(bloc: _bloc),
+            Positioned.fill(child: ChatBody(bloc: _bloc)),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: EventChatTheme.inputBottomShadowExtent,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: chat.inputBottomShadowGradient,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: ChatInput(bloc: _bloc),
+            ),
           ],
         ),
       ),

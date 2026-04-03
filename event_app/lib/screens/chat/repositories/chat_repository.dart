@@ -17,10 +17,19 @@ class ChatRepository {
         .toList();
   }
 
-  Future<EventMessage> sendMessage(String text) async {
+  Future<EventMessage> sendMessage(
+    String text, {
+    String? replyToId,
+  }) async {
+    final body = <String, dynamic>{'text': text};
+    if (replyToId != null &&
+        replyToId.isNotEmpty &&
+        !replyToId.startsWith('temp_')) {
+      body['reply_to_id'] = replyToId;
+    }
     final data = await _client.post(
       '/events/$eventId/messages',
-      body: {'text': text},
+      body: body,
       withAuth: true,
     );
     return EventMessage.fromApi(data);

@@ -86,8 +86,13 @@ io.on('connection', (socket) => {
 
   socket.on(
     'sendMessage',
-    async (payload: { eventId: string; userId: string; text: string }) => {
-      const { eventId, userId, text } = payload;
+    async (payload: {
+      eventId: string;
+      userId: string;
+      text: string;
+      reply_to_id?: string | null;
+    }) => {
+      const { eventId, userId, text, reply_to_id: replyToId } = payload;
       if (!eventId || !userId || !text.trim()) return;
 
       const client = await pool.connect();
@@ -98,13 +103,41 @@ io.on('connection', (socket) => {
         );
         if (participant.rowCount === 0) return;
 
+        let rid: string | null = null;
+        if (replyToId && typeof replyToId === 'string') {
+          const ok = await client.query(
+            `SELECT 1 FROM event_messages WHERE id = $1 AND event_id = $2`,
+            [replyToId, eventId],
+          );
+          if ((ok.rowCount ?? 0) > 0) rid = replyToId;
+        }
+
         const insert = await client.query(
           `
-          INSERT INTO event_messages (event_id, user_id, text)
-          VALUES ($1, $2, $3)
-          RETURNING id, event_id, user_id, text, created_at, edited_at
+          WITH ins AS (
+            INSERT INTO event_messages (event_id, user_id, text, reply_to_id)
+            VALUES ($1, $2, $3, $4)
+            RETURNING *
+          )
+          SELECT ins.id,
+                 ins.event_id,
+                 ins.user_id,
+                 ins.text,
+                 ins.created_at,
+                 ins.edited_at,
+                 ins.reply_to_id,
+                 u.email AS user_email,
+                 u.display_name AS user_display_name,
+                 u.avatar_url AS avatar_url,
+                 reply_msg.text AS reply_to_text,
+                 ru.display_name AS reply_to_author_name,
+                 ru.email AS reply_to_author_email
+          FROM ins
+          LEFT JOIN users u ON u.id = ins.user_id
+          LEFT JOIN event_messages reply_msg ON reply_msg.id = ins.reply_to_id
+          LEFT JOIN users ru ON ru.id = reply_msg.user_id
           `,
-          [eventId, userId, text.trim()],
+          [eventId, userId, text.trim(), rid],
         );
 
         const msg = insert.rows[0];

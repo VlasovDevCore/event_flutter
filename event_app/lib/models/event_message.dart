@@ -21,6 +21,13 @@ class EventMessage {
   final DateTime? viewedAt;
   final DateTime? editedAt;
 
+  /// Ответ на исходное сообщение (id в этом же чате).
+  final String? replyToId;
+  /// Текст исходного сообщения (для превью).
+  final String? replyToText;
+  final String? replyToAuthorName;
+  final String? replyToAuthorEmail;
+
   const EventMessage({
     required this.id,
     required this.text,
@@ -32,7 +39,22 @@ class EventMessage {
     this.isViewed = false,
     this.viewedAt,
     this.editedAt,
+    this.replyToId,
+    this.replyToText,
+    this.replyToAuthorName,
+    this.replyToAuthorEmail,
   });
+
+  /// Подпись автора цитируемого сообщения для UI.
+  String? get replyQuoteAuthorLabel {
+    if (replyToAuthorName != null && replyToAuthorName!.trim().isNotEmpty) {
+      return replyToAuthorName!.trim();
+    }
+    if (replyToAuthorEmail != null && replyToAuthorEmail!.trim().isNotEmpty) {
+      return replyToAuthorEmail!.trim();
+    }
+    return null;
+  }
 
   factory EventMessage.fromApi(Map<String, dynamic> map) {
     final viewedAtRaw =
@@ -51,6 +73,12 @@ class EventMessage {
       editedAt = EventMessage.tryParseDateTimeFromApi(editedAtRaw);
     }
 
+    final replyToRaw = map['reply_to_id'];
+    String? replyToId;
+    if (replyToRaw is String && replyToRaw.isNotEmpty) {
+      replyToId = replyToRaw;
+    }
+
     return EventMessage(
       id: map['id'] as String,
       text: map['text'] as String,
@@ -62,6 +90,10 @@ class EventMessage {
       isViewed: isViewed,
       viewedAt: viewedAt,
       editedAt: editedAt,
+      replyToId: replyToId,
+      replyToText: map['reply_to_text'] as String?,
+      replyToAuthorName: map['reply_to_author_name'] as String?,
+      replyToAuthorEmail: map['reply_to_author_email'] as String?,
     );
   }
 
@@ -84,6 +116,10 @@ class EventMessage {
     bool? isViewed,
     DateTime? viewedAt,
     DateTime? editedAt,
+    String? replyToId,
+    String? replyToText,
+    String? replyToAuthorName,
+    String? replyToAuthorEmail,
   }) {
     return EventMessage(
       id: id ?? this.id,
@@ -96,6 +132,10 @@ class EventMessage {
       isViewed: isViewed ?? this.isViewed,
       viewedAt: viewedAt ?? this.viewedAt,
       editedAt: editedAt ?? this.editedAt,
+      replyToId: replyToId ?? this.replyToId,
+      replyToText: replyToText ?? this.replyToText,
+      replyToAuthorName: replyToAuthorName ?? this.replyToAuthorName,
+      replyToAuthorEmail: replyToAuthorEmail ?? this.replyToAuthorEmail,
     );
   }
 
@@ -111,6 +151,10 @@ class EventMessage {
       'is_viewed': isViewed,
       'viewed_at': viewedAt?.toIso8601String(),
       'edited_at': editedAt?.toIso8601String(),
+      'reply_to_id': replyToId,
+      'reply_to_text': replyToText,
+      'reply_to_author_name': replyToAuthorName,
+      'reply_to_author_email': replyToAuthorEmail,
     };
   }
 }
