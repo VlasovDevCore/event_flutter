@@ -23,18 +23,17 @@ class ReplyQuote extends StatelessWidget {
     final author = message.replyQuoteAuthorLabel ?? 'Сообщение';
     final raw = message.replyToText?.trim() ?? '';
     final snippet = raw.isEmpty ? '…' : raw;
-    final display =
-        snippet.length > 160 ? '${snippet.substring(0, 157)}…' : snippet;
+    final display = snippet.length > 160
+        ? '${snippet.substring(0, 157)}…'
+        : snippet;
 
     final content = Container(
+      constraints: const BoxConstraints(minWidth: 100),
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.22),
         borderRadius: BorderRadius.circular(10),
-        border: Border(
-          left: BorderSide(color: borderColor, width: 3),
-        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

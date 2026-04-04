@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../../models/event_message.dart';
 import '../../../../services/api_client.dart';
+import '../../profile/profile_screen.dart';
 import '../chat_appearance.dart';
 import 'reply_quote.dart';
 
@@ -20,6 +21,8 @@ class MessageBubbleOther extends StatelessWidget {
   final ValueChanged<Offset> onCopyTap;
   final VoidCallback? onReplyQuoteTap;
   final bool isJumpHighlighted;
+  /// Подсветка, пока открыто меню действий по этому сообщению.
+  final bool isActionsMenuHighlighted;
 
   const MessageBubbleOther({
     super.key,
@@ -32,6 +35,7 @@ class MessageBubbleOther extends StatelessWidget {
     required this.onCopyTap,
     this.onReplyQuoteTap,
     this.isJumpHighlighted = false,
+    this.isActionsMenuHighlighted = false,
   });
 
   @override
@@ -53,7 +57,9 @@ class MessageBubbleOther extends StatelessWidget {
     const bubbleBase = Color(0xFF1A1A1A);
     final bubbleFill = isJumpHighlighted
         ? Color.lerp(bubbleBase, const Color(0xFF3D3D3D), 0.48)!
-        : bubbleBase;
+        : isActionsMenuHighlighted
+            ? Color.lerp(bubbleBase, const Color(0xFF3D3D3D), 0.30)!
+            : bubbleBase;
 
     final bubbleContent = AnimatedContainer(
       duration: const Duration(milliseconds: 380),
@@ -84,7 +90,7 @@ class MessageBubbleOther extends StatelessWidget {
                     message.replyQuoteAuthorLabel != null))
               ReplyQuote(
                 message: message,
-                authorColor: chat.senderName,
+                authorColor: const Color(0xFFFFFFFF),
                 textColor: const Color(0xFFFFFFFF),
                 borderColor: chat.senderName.withValues(alpha: 0.85),
                 onTap: onReplyQuoteTap,
@@ -152,10 +158,7 @@ class MessageBubbleOther extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (showName) _buildName(context),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: bubble,
-              ),
+              Align(alignment: Alignment.centerLeft, child: bubble),
             ],
           ),
         ),
@@ -164,15 +167,16 @@ class MessageBubbleOther extends StatelessWidget {
   }
 
   Widget _buildAvatar(BuildContext context, String? avatarUrl) {
-    return Container(
+    final userId = message.userId?.trim();
+    final canOpenProfile = userId != null && userId.isNotEmpty;
+
+    final avatar = Container(
       width: 42,
       height: 42,
       margin: const EdgeInsets.only(right: 8),
       decoration: BoxDecoration(borderRadius: BorderRadius.circular(12)),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          12,
-        ), // должно совпадать со значением выше
+        borderRadius: BorderRadius.circular(12),
         child: avatarUrl != null && avatarUrl.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: avatarUrl,
@@ -198,6 +202,23 @@ class MessageBubbleOther extends StatelessWidget {
                 size: 20,
                 color: Color(0xFFABABAB),
               ),
+      ),
+    );
+
+    if (!canOpenProfile) return avatar;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push<void>(
+            MaterialPageRoute<void>(
+              builder: (_) => ProfileScreen(userId: userId),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: avatar,
       ),
     );
   }

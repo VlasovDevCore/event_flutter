@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/profile/relationship_buttons.dart';
 import '../../widgets/profile/stat_badge.dart';
 import '../../widgets/profile/stat_card.dart';
 import '../auth/auth_screen.dart';
@@ -40,6 +41,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<ProfileRelationship> _relationshipFuture;
   late Future<ProfileBlockStatus> _blockStatusFuture;
   late Future<List<ProfileAchievement>> _otherAchievementsFuture;
+  /// Один общий future для [FutureBuilder] — нельзя создавать [Future.wait] в [build],
+  /// иначе при любом [setState] виджет сбрасывается в loading.
+  late Future<List<dynamic>> _otherProfileCombinedFuture;
 
   // Для своего профиля - провайдеры
   ProfileProvider? _profileProvider;
@@ -47,7 +51,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ProfileAchievementsProvider? _achievementsProvider;
 
   bool _savingProfile = false;
-  bool _isBlocked = false;
+
+  bool _isLoggedIn() =>
+      Hive.box('authBox').get('token') != null;
 
   @override
   void initState() {
@@ -74,6 +80,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _otherAchievementsFuture = ProfileRepository.fetchUserAchievements(
       widget.userId!,
     );
+    _otherProfileCombinedFuture = Future.wait([
+      _otherUserFuture,
+      _otherStatsFuture,
+      _relationshipFuture,
+      _blockStatusFuture,
+      _otherAchievementsFuture,
+    ]);
   }
 
   @override
@@ -125,9 +138,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Future<void> _reloadRelationshipData() async {
     if (!mounted || widget.userId == null) return;
+    final id = widget.userId!;
     setState(() {
-      _relationshipFuture = ProfileRepository.fetchRelationship(widget.userId!);
-      _blockStatusFuture = ProfileRepository.fetchBlockStatus(widget.userId!);
+      _relationshipFuture = ProfileRepository.fetchRelationship(id);
+      _blockStatusFuture = ProfileRepository.fetchBlockStatus(id);
+      _otherStatsFuture = ProfileRepository.fetchUserStats(id);
+      _otherProfileCombinedFuture = Future.wait([
+        _otherUserFuture,
+        _otherStatsFuture,
+        _relationshipFuture,
+        _blockStatusFuture,
+        _otherAchievementsFuture,
+      ]);
     });
   }
 
@@ -147,12 +169,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Future<void> _confirmSignOut() async {
     final ok = await ProfileDialogs.confirmSignOut(context);
     if (ok != true || !mounted) return;
-    await Hive.box('authBox').clear();
-    if (!mounted) return;
+
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute<void>(builder: (_) => const AuthScreen()),
       (route) => false,
     );
+
+    try {
+      await ProfileRepository.clearSession();
+    } catch (_) {
+      try {
+        await Hive.box('authBox').clear();
+        await Hive.box('eventsBox').clear();
+      } catch (_) {}
+    }
   }
 
   Future<void> _handleBlock() async {
@@ -166,9 +196,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         withAuth: true,
       );
       if (!mounted) return;
-      setState(() {
-        _isBlocked = true;
-      });
       await _reloadRelationshipData();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -190,9 +217,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         withAuth: true,
       );
       if (!mounted) return;
-      setState(() {
-        _isBlocked = false;
-      });
       await _reloadRelationshipData();
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -246,20 +270,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
           isMe: true,
           isLoadingStats: _statsProvider!.isLoading,
           isLoadingAchievements: _achievementsProvider!.isLoading,
+          relationship: null,
+          blockStatus: null,
         );
       },
     );
   }
 
   Widget _buildOtherProfile() {
-    return FutureBuilder(
-      future: Future.wait([
-        _otherUserFuture,
-        _otherStatsFuture,
-        _relationshipFuture,
-        _blockStatusFuture,
-        _otherAchievementsFuture,
-      ]),
+    return FutureBuilder<List<dynamic>>(
+      future: _otherProfileCombinedFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(
@@ -301,6 +321,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
         final profile = results[0] as ProfileMe?;
         final stats = results[1] as ProfileStats;
+        final relationship = results[2] as ProfileRelationship;
+        final blockStatus = results[3] as ProfileBlockStatus;
         final achievements = results[4] as List<ProfileAchievement>;
 
         if (profile == null) {
@@ -319,6 +341,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           isMe: false,
           isLoadingStats: false,
           isLoadingAchievements: false,
+          relationship: relationship,
+          blockStatus: blockStatus,
         );
       },
     );
@@ -331,6 +355,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required bool isMe,
     required bool isLoadingStats,
     required bool isLoadingAchievements,
+    ProfileRelationship? relationship,
+    ProfileBlockStatus? blockStatus,
   }) {
     final title = (profile.displayName?.isNotEmpty == true)
         ? profile.displayName!
@@ -379,7 +405,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onLogoutPressed: isMe ? _confirmSignOut : null,
               onBlockPressed: !isMe ? _handleBlock : null,
               onUnblockPressed: !isMe ? _handleUnblock : null,
-              isBlocked: _isBlocked,
+              isBlocked: blockStatus?.isBlocked ?? false,
               isSaving: _savingProfile,
             ),
           ),
@@ -416,6 +442,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
+              if (!isMe &&
+                  relationship != null &&
+                  blockStatus != null &&
+                  _isLoggedIn() &&
+                  widget.userId != null) ...[
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: RelationshipButtons(
+                    userId: widget.userId!,
+                    title: title,
+                    isFollowing: relationship.isFollowing,
+                    canMessage:
+                        (relationship.isFriends ||
+                            profile.allowMessagesFromNonFriends) &&
+                        !blockStatus.isBlocked &&
+                        !blockStatus.isBlockedBy,
+                    isUserBlocked: blockStatus.isBlocked,
+                    onFollowingChanged: () {
+                      unawaited(_reloadRelationshipData());
+                    },
+                  ),
+                ),
+              ],
               const SizedBox(height: 16),
               _buildStatsRow(stats, isLoadingStats),
             ],

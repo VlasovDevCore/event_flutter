@@ -32,6 +32,21 @@ class EventChatTheme {
   /// Высота градиента тени под плавающим полем ввода.
   static const double inputBottomShadowExtent = 120;
 
+  /// Высота градиента под плавающим app bar (фон чата #161616 → прозрачно к ленте).
+  static const double appBarTopShadowExtent = 120;
+
+  static const Color _chatListBg = Color(0xFF161616);
+
+  /// Тень снизу вверх под плавающим app bar (поверх ленты сообщений).
+  LinearGradient get appBarTopShadowGradient => LinearGradient(
+        begin: Alignment.bottomCenter,
+        end: Alignment.topCenter,
+        colors: [
+          _chatListBg.withValues(alpha: 0),
+          _chatListBg,
+        ],
+      );
+
   /// Тёмная тень снизу вверх (под полем ввода, поверх ленты сообщений).
   LinearGradient get inputBottomShadowGradient => LinearGradient(
         begin: Alignment.bottomCenter,

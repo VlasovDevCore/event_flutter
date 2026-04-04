@@ -1,14 +1,15 @@
 import 'package:flutter/material.dart';
-import '../bloc/chat_bloc.dart';
+
+import '../bloc/direct_chat_bloc.dart';
 import '../chat_appearance.dart';
 import 'chat_app_bar.dart';
-import 'chat_message_list.dart';
-import 'scroll_to_bottom_button.dart';
+import 'direct_chat_message_list.dart';
+import 'direct_scroll_to_bottom_button.dart';
 
-class ChatBody extends StatelessWidget {
-  final ChatBloc bloc;
+class DirectChatBody extends StatelessWidget {
+  const DirectChatBody({super.key, required this.bloc});
 
-  const ChatBody({super.key, required this.bloc});
+  final DirectChatBloc bloc;
 
   @override
   Widget build(BuildContext context) {
@@ -57,11 +58,11 @@ class ChatBody extends StatelessWidget {
         }
 
         return Container(
-          color: const Color(0xFF161616),  // ← сплошной цвет
+          color: const Color(0xFF161616),
           child: Stack(
             children: [
-              ChatMessageList(bloc: bloc),
-              ScrollToBottomButton(bloc: bloc),
+              DirectChatMessageList(bloc: bloc),
+              DirectScrollToBottomButton(bloc: bloc),
             ],
           ),
         );

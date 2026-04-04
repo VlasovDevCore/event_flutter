@@ -14,6 +14,8 @@ class MessageBubbleMy extends StatelessWidget {
   final ValueChanged<Offset> onActionRequested;
   final VoidCallback? onReplyQuoteTap;
   final bool isJumpHighlighted;
+  /// Подсветка, пока открыто меню действий по этому сообщению.
+  final bool isActionsMenuHighlighted;
 
   const MessageBubbleMy({
     super.key,
@@ -26,25 +28,28 @@ class MessageBubbleMy extends StatelessWidget {
     required this.onActionRequested,
     this.onReplyQuoteTap,
     this.isJumpHighlighted = false,
+    this.isActionsMenuHighlighted = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
-    final topRight = isFirstInGroup ? 12.0 : 4.0; // было 18/6
-    final bottomRight = isLastInGroup ? 12.0 : 4.0; // было 18/6
+    final topRight = isFirstInGroup ? 12.0 : 4.0;
+    final bottomRight = isLastInGroup ? 12.0 : 4.0;
     final borderRadius = BorderRadius.only(
-      topLeft: const Radius.circular(12), // было 18
+      topLeft: const Radius.circular(12),
       topRight: Radius.circular(topRight),
-      bottomLeft: const Radius.circular(12), // было 18
+      bottomLeft: const Radius.circular(12),
       bottomRight: Radius.circular(bottomRight),
     );
 
     const bubbleBase = Color(0xFF00FF7F);
     final bubbleFill = isJumpHighlighted
         ? Color.lerp(bubbleBase, const Color(0xFFD4FFF0), 0.42)!
-        : bubbleBase;
+        : isActionsMenuHighlighted
+            ? Color.lerp(bubbleBase, const Color(0xFFD4FFF0), 0.26)!
+            : bubbleBase;
 
     return Align(
       alignment: Alignment.centerRight,
@@ -59,8 +64,7 @@ class MessageBubbleMy extends StatelessWidget {
             Builder(
               builder: (bubbleContext) {
                 void openActions() {
-                  final box =
-                      bubbleContext.findRenderObject() as RenderBox?;
+                  final box = bubbleContext.findRenderObject() as RenderBox?;
                   if (box == null) return;
                   onActionRequested(
                     box.localToGlobal(Offset(0, box.size.height)),
@@ -74,75 +78,60 @@ class MessageBubbleMy extends StatelessWidget {
                     borderRadius: borderRadius,
                     clipBehavior: Clip.antiAlias,
                     child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 380),
-                    curve: Curves.easeOut,
-                    decoration: BoxDecoration(
-                      color: bubbleFill,
-                      borderRadius: borderRadius,
-                      border: Border.all(
-                        color: scheme.primary.withValues(alpha: 0.14),
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: chat.shadowSoft,
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
+                      duration: const Duration(milliseconds: 380),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: bubbleFill,
+                        borderRadius: borderRadius,
+                        border: Border.all(
+                          color: scheme.primary.withValues(alpha: 0.14),
                         ),
-                      ],
-                    ),
-                    child: InkWell(
-                      onTap: openActions,
-                      onLongPress: openActions,
-                      borderRadius: borderRadius,
-                      child: Container(
-                        constraints: const BoxConstraints(minWidth: 74),
-                        padding: const EdgeInsets.fromLTRB(14, 11, 12, 9),
-                        child: Stack(
-                          clipBehavior: Clip.none,
-                          children: [
-                            IntrinsicWidth(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  if (message.replyToId != null &&
-                                      (message.replyToText != null ||
-                                          message.replyQuoteAuthorLabel != null))
-                                    ReplyQuote(
-                                      message: message,
-                                      authorColor: const Color(0xFF006633),
-                                      textColor: const Color(0xFF00461E),
-                                      borderColor: const Color(0xFF008844),
-                                      onTap: onReplyQuoteTap,
-                                    ),
-                                  Align(
-                                    alignment: Alignment.centerRight,
-                                    child: Text(
-                                      message.text,
-                                      textAlign: TextAlign.right,
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        fontSize: 15,
-                                        height: 1.38,
-                                        fontWeight: FontWeight.w500,
-                                        color: const Color(0xFF00461E),
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16), // Отступ для статуса
-                                ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: chat.shadowSoft,
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: InkWell(
+                        onTap: openActions,
+                        onLongPress: openActions,
+                        borderRadius: borderRadius,
+                        child: Container(
+                          padding: const EdgeInsets.fromLTRB(14, 11, 12, 9),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (message.replyToId != null &&
+                                  (message.replyToText != null ||
+                                      message.replyQuoteAuthorLabel != null))
+                                ReplyQuote(
+                                  message: message,
+                                  authorColor: const Color(0xFF006633),
+                                  textColor: const Color(0xFF00461E),
+                                  borderColor: const Color(0xFF008844),
+                                  onTap: onReplyQuoteTap,
+                                ),
+                              Text(
+                                message.text,
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 15,
+                                  height: 1.38,
+                                  fontWeight: FontWeight.w500,
+                                  color: Color(0xFF00461E),
+                                ),
                               ),
-                            ),
-                            Positioned(
-                              right: -8,
-                              bottom: -6,
-                              child: _buildStatusIndicator(context),
-                            ),
-                          ],
+                              const SizedBox(height: 16),
+                              _buildStatusIndicator(context),
+                            ],
+                          ),
                         ),
                       ),
                     ),
-                  ),
                   ),
                 );
               },
@@ -154,7 +143,6 @@ class MessageBubbleMy extends StatelessWidget {
   }
 
   Widget _buildStatusIndicator(BuildContext context) {
-    // Ваши цвета
     const Color textColor = Color(0xFF00461E);
     const Color iconColor = Color(0xFF006633);
     const Color iconReadColor = Color(0xFF008844);
@@ -164,11 +152,15 @@ class MessageBubbleMy extends StatelessWidget {
       children: [
         Text(
           dateFormat.format(message.createdAt),
-          style: TextStyle(fontFamily: 'Inter', fontSize: 10, color: textColor),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 10,
+            color: textColor,
+          ),
         ),
         if (message.editedAt != null) ...[
           const SizedBox(width: 4),
-          Text(
+          const Text(
             'ред.',
             style: TextStyle(
               fontFamily: 'Inter',
@@ -189,9 +181,9 @@ class MessageBubbleMy extends StatelessWidget {
             ),
           )
         else if (isSent && message.isViewed)
-          Icon(Icons.done_all_rounded, size: 15, color: iconReadColor)
+          const Icon(Icons.done_all_rounded, size: 15, color: iconReadColor)
         else if (isSent)
-          Icon(Icons.check_rounded, size: 14, color: iconColor)
+          const Icon(Icons.check_rounded, size: 14, color: iconColor)
         else
           Icon(
             Icons.error_outline_rounded,

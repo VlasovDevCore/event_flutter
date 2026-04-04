@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
-import '../bloc/chat_bloc.dart';
-import '../chat_appearance.dart';
 
-class ReplyBanner extends StatelessWidget {
-  final ChatBloc bloc;
+import '../bloc/direct_chat_bloc.dart';
 
-  const ReplyBanner({super.key, required this.bloc});
+class DirectReplyBanner extends StatelessWidget {
+  const DirectReplyBanner({super.key, required this.bloc});
+
+  final DirectChatBloc bloc;
 
   @override
   Widget build(BuildContext context) {
     final target = bloc.replyingToMessage;
     if (target == null) return const SizedBox.shrink();
 
-    final chat = EventChatTheme.of(context);
     final scheme = Theme.of(context).colorScheme;
     final preview = target.text.trim().isEmpty ? '…' : target.text.trim();
 

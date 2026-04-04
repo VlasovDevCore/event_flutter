@@ -75,17 +75,17 @@ class EventMessage {
 
     final replyToRaw = map['reply_to_id'];
     String? replyToId;
-    if (replyToRaw is String && replyToRaw.isNotEmpty) {
-      replyToId = replyToRaw;
+    if (replyToRaw != null && replyToRaw.toString().trim().isNotEmpty) {
+      replyToId = replyToRaw.toString();
     }
 
     return EventMessage(
-      id: map['id'] as String,
+      id: map['id'].toString(),
       text: map['text'] as String,
       userEmail: (map['user_email'] as String?) ?? '',
       userDisplayName: map['user_display_name'] as String?,
       createdAt: EventMessage.parseDateTimeFromApi(map['created_at'] as String),
-      userId: map['user_id'] as String?,
+      userId: map['user_id']?.toString(),
       avatarUrl: map['avatar_url'] as String?, // Добавляем парсинг аватарки
       isViewed: isViewed,
       viewedAt: viewedAt,

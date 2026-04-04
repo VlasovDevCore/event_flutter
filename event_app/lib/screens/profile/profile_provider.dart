@@ -1,20 +1,29 @@
 // profile_provider.dart
-import 'package:flutter/material.dart';
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'profile_models.dart';
 
 class ProfileProvider extends ChangeNotifier {
   ProfileMe? _profile;
+  StreamSubscription<BoxEvent>? _authBoxSub;
 
   ProfileMe? get profile => _profile;
 
   ProfileProvider() {
     _loadProfile();
-    // Слушаем изменения в Hive
-    Hive.box('authBox').watch().listen((event) {
+    _authBoxSub = Hive.box('authBox').watch().listen((_) {
       _loadProfile();
       notifyListeners();
     });
+  }
+
+  @override
+  void dispose() {
+    _authBoxSub?.cancel();
+    _authBoxSub = null;
+    super.dispose();
   }
 
   void _loadProfile() {

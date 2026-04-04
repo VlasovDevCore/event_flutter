@@ -37,18 +37,20 @@ class _EventChatScreenState extends State<EventChatScreen> {
   }
 
   void _showCopyMenu(Offset anchorGlobalPosition, EventMessage msg) {
+    _bloc.setMessageActionsMenuOpen(msg.id);
     MessageActionsDialog.showParticipantMessageActions(
       context,
-      anchorGlobalPosition,
       msg,
       () => _bloc.startReplyTo(msg),
-    );
+    ).whenComplete(() {
+      if (mounted) _bloc.setMessageActionsMenuOpen(null);
+    });
   }
 
   void _showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg, bool isSending) {
+    _bloc.setMessageActionsMenuOpen(msg.id);
     MessageActionsDialog.showMyMessageActions(
       context,
-      anchorGlobalPosition,
       msg,
       isSending,
       () => _bloc.startEditingMessage(msg),
@@ -61,13 +63,15 @@ class _EventChatScreenState extends State<EventChatScreen> {
         }
       },
       () => _bloc.startReplyTo(msg),
-    );
+    ).whenComplete(() {
+      if (mounted) _bloc.setMessageActionsMenuOpen(null);
+    });
   }
 
   void _showOrganizerMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
+    _bloc.setMessageActionsMenuOpen(msg.id);
     MessageActionsDialog.showOrganizerOtherMessageActions(
       context,
-      anchorGlobalPosition,
       msg,
       () async {
         final confirmed = await MessageActionsDialog.showDeleteConfirmation(
@@ -78,7 +82,9 @@ class _EventChatScreenState extends State<EventChatScreen> {
         }
       },
       () => _bloc.startReplyTo(msg),
-    );
+    ).whenComplete(() {
+      if (mounted) _bloc.setMessageActionsMenuOpen(null);
+    });
   }
 
   void _showToast(String message) {
@@ -111,6 +117,7 @@ class _EventChatScreenState extends State<EventChatScreen> {
     final chat = EventChatTheme.of(context);
     return Scaffold(
       backgroundColor: chat.scaffold,
+      extendBodyBehindAppBar: true,
       appBar: ChatAppBar(event: widget.event),
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
@@ -122,6 +129,19 @@ class _EventChatScreenState extends State<EventChatScreen> {
           alignment: Alignment.bottomCenter,
           children: [
             Positioned.fill(child: ChatBody(bloc: _bloc)),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: EventChatTheme.appBarTopShadowExtent,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: chat.appBarTopShadowGradient,
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               left: 0,
               right: 0,

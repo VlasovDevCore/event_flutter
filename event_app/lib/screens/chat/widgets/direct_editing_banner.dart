@@ -1,32 +1,41 @@
 import 'package:flutter/material.dart';
-import '../bloc/chat_bloc.dart';
+
+import '../bloc/direct_chat_bloc.dart';
 import '../chat_appearance.dart';
 
-class ReplyBanner extends StatelessWidget {
-  final ChatBloc bloc;
+class DirectEditingBanner extends StatelessWidget {
+  const DirectEditingBanner({super.key, required this.bloc});
 
-  const ReplyBanner({super.key, required this.bloc});
+  final DirectChatBloc bloc;
+
+  String get _previewText {
+    final id = bloc.editingMessageId;
+    if (id == null) return '';
+    for (final m in bloc.messages) {
+      if (m.id == id) {
+        final t = m.text.trim();
+        return t.isEmpty ? '…' : t;
+      }
+    }
+    final t = bloc.textController.text.trim();
+    return t.isEmpty ? '…' : t;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final target = bloc.replyingToMessage;
-    if (target == null) return const SizedBox.shrink();
-
     final chat = EventChatTheme.of(context);
-    final scheme = Theme.of(context).colorScheme;
-    final preview = target.text.trim().isEmpty ? '…' : target.text.trim();
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.transparent,
+        color: chat.editingBannerBg,
         borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: Colors.white.withValues(alpha: 0.8),
-              width: 1,
+              color: Colors.white.withValues(alpha: 0.5),
+              width: 1.0,
             ),
           ),
           child: Padding(
@@ -36,9 +45,9 @@ class ReplyBanner extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(left: 6),
                   child: Icon(
-                    Icons.reply_rounded,
+                    Icons.edit_outlined,
                     size: 20,
-                    color: scheme.primary,
+                    color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -48,24 +57,24 @@ class ReplyBanner extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        'Ответ ${target.displayName}',
+                        'Редактирование',
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: scheme.onSurface.withValues(alpha: 0.9),
+                          color: Colors.white.withValues(alpha: 0.9),
                           letterSpacing: 0.2,
                         ),
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        preview,
+                        _previewText,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontFamily: 'Inter',
                           fontSize: 12,
-                          color: scheme.onSurfaceVariant,
+                          color: Colors.white.withValues(alpha: 0.7),
                           height: 1.25,
                         ),
                       ),
@@ -75,10 +84,10 @@ class ReplyBanner extends StatelessWidget {
                 IconButton(
                   icon: Icon(
                     Icons.close_rounded,
-                    color: scheme.onSurfaceVariant,
+                    color: Colors.white.withValues(alpha: 0.7),
                     size: 22,
                   ),
-                  onPressed: bloc.cancelReply,
+                  onPressed: bloc.cancelEditing,
                 ),
               ],
             ),

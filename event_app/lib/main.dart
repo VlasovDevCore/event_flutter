@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:app_links/app_links.dart';
 
+import 'app_route_observer.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/profile/profile_screen.dart';
@@ -45,6 +46,7 @@ class EventApp extends StatelessWidget {
 
     return MaterialApp(
       navigatorKey: _navigatorKey,
+      navigatorObservers: [appRouteObserver],
       title: 'Events',
       locale: const Locale('ru'),
       localizationsDelegates: const [

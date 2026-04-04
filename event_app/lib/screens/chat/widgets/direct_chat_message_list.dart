@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import '../../../models/event_message.dart';
-import '../bloc/chat_bloc.dart';
+import '../bloc/direct_chat_bloc.dart';
 import '../chat_appearance.dart';
 import 'chat_app_bar.dart';
-import 'chat_input.dart';
+import 'direct_chat_input.dart';
 import 'message_bubble_my.dart';
 import 'message_bubble_other.dart';
 
-class ChatMessageList extends StatelessWidget {
-  final ChatBloc bloc;
-
-  /// Визуальный зазор между последними сообщениями и низом экрана (над панелью ввода).
+/// Лента сообщений личного чата — та же вёрстка, что у [ChatMessageList].
+class DirectChatMessageList extends StatelessWidget {
   static const double messageBottomGap = 12;
 
-  const ChatMessageList({super.key, required this.bloc});
+  const DirectChatMessageList({super.key, required this.bloc});
+
+  final DirectChatBloc bloc;
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +29,8 @@ class ChatMessageList extends StatelessWidget {
       listenable: bloc,
       builder: (context, _) {
         final inputAreaHeight =
-            ChatInput.overlayReserveHeight(context, bloc) + messageBottomGap;
+            DirectChatInput.overlayReserveHeight(context, bloc) +
+                messageBottomGap;
 
         final topPad = ChatAppBar.listTopPadding(context);
 
@@ -38,10 +40,9 @@ class ChatMessageList extends StatelessWidget {
           padding: EdgeInsets.fromLTRB(12, topPad, 12, 8),
           itemCount: n + 1,
           itemBuilder: (context, index) {
-            // При reverse: index 0 — у нижнего края, под ним «виртуальное» место под панель ввода.
             if (index == 0) {
               return SizedBox(
-                key: const ValueKey('chat_input_area_spacer'),
+                key: const ValueKey('direct_chat_input_area_spacer'),
                 height: inputAreaHeight,
                 width: double.infinity,
               );
@@ -57,7 +58,6 @@ class ChatMessageList extends StatelessWidget {
             final msg = messages[msgIndex];
             final isMe = bloc.myId != null && msg.userId == bloc.myId;
 
-            // При reverse: первое в группе по времени — сверху визуально → отступ сверху
             final gapTop = _isFirstInGroup(messages, msgIndex) ? 10.0 : 4.0;
             Widget bubble;
             final jumpHl = bloc.jumpHighlightedMessageId == msg.id;
@@ -84,9 +84,8 @@ class ChatMessageList extends StatelessWidget {
                 dateFormat: dateFormat,
                 isFirstInGroup: _isFirstInGroup(messages, msgIndex),
                 isLastInGroup: _isLastInGroup(messages, msgIndex),
-                isOrganizer: bloc.isOrganizer,
-                onOrganizerActionRequested: (pos) =>
-                    bloc.showOrganizerMessageActions(pos, msg),
+                isOrganizer: false,
+                onOrganizerActionRequested: (_) {},
                 onCopyTap: (anchor) => bloc.showCopyMenuForMessage(anchor, msg),
                 onReplyQuoteTap: msg.replyToId != null
                     ? () => bloc.scrollToRepliedMessage(msg.replyToId)

@@ -35,7 +35,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   List<Event> _events = [];
   LatLng? _userPosition;
@@ -47,6 +47,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Timer? _visibleEventsDebounce;
   Timer? _geoMoveTimer;
   bool _isLoadingProfile = false;
+  int _directUnreadCount = 0;
 
   String? _currentUserEmail() {
     final authBox = Hive.box('authBox');
@@ -91,15 +92,43 @@ class _HomeScreenState extends State<HomeScreen> {
     _visibleEventsDebounce?.cancel();
     _geoMoveTimer?.cancel();
     _loadEventsDebounce?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadUserProfile(); // Загружаем профиль при старте
     _loadEventsFromApi();
     _initLocation(zoom: 13, immediateZoom: false);
+    _fetchDirectUnreadCount();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _fetchDirectUnreadCount();
+    }
+  }
+
+  Future<void> _fetchDirectUnreadCount() async {
+    if (Hive.box('authBox').get('token') == null) {
+      if (mounted) setState(() => _directUnreadCount = 0);
+      return;
+    }
+    try {
+      final map = await ApiClient.instance.get(
+        '/messages/unread-count',
+        withAuth: true,
+      );
+      final raw = map['count'];
+      final n = raw is int ? raw : int.tryParse('$raw') ?? 0;
+      if (mounted) setState(() => _directUnreadCount = n < 0 ? 0 : n);
+    } catch (_) {
+      /* сеть / не авторизован — тихо */
+    }
   }
 
   // Новый метод для загрузки профиля пользователя
@@ -481,6 +510,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required IconData icon,
     required VoidCallback? onPressed,
     String? tooltip,
+    int? badgeCount,
   }) {
     const background = Color(0xCC161616);
     const pressedBackground = Color(0xFF2C2E36);
@@ -488,22 +518,56 @@ class _HomeScreenState extends State<HomeScreen> {
     const size = 56.0;
     const borderRadius = 20.0; // радиус скругления
 
+    final showBadge = badgeCount != null && badgeCount > 0;
+    final label = badgeCount != null && badgeCount > 99
+        ? '99+'
+        : '${badgeCount ?? 0}';
+
     final button = SizedBox(
       width: size,
       height: size,
-      child: Material(
-        color: background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(borderRadius),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(borderRadius),
-          onTap: onPressed,
-          splashColor: pressedBackground.withOpacity(0.5),
-          highlightColor: pressedBackground,
-          child: Center(child: Icon(icon, color: foreground)),
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Material(
+            color: background,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(borderRadius),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(borderRadius),
+              onTap: onPressed,
+              splashColor: pressedBackground.withOpacity(0.5),
+              highlightColor: pressedBackground,
+              child: Center(child: Icon(icon, color: foreground)),
+            ),
+          ),
+          if (showBadge)
+            Positioned(
+              right: -2,
+              top: -2,
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                padding: const EdgeInsets.symmetric(horizontal: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE53935),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFF161616), width: 2),
+                ),
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    height: 1.1,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+        ],
       ),
     );
 
@@ -897,12 +961,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   _mapRoundIconButton(
                     icon: Icons.forum_outlined,
+                    badgeCount:
+                        _directUnreadCount > 0 ? _directUnreadCount : null,
                     onPressed: () {
-                      Navigator.of(context).push(
+                      Navigator.of(context)
+                          .push<void>(
                         MaterialPageRoute<void>(
                           builder: (_) => const DirectChatPickerScreen(),
                         ),
-                      );
+                      )
+                          .then((_) => _fetchDirectUnreadCount());
                     },
                   ),
                 ],

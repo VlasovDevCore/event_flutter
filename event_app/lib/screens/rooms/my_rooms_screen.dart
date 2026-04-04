@@ -12,6 +12,7 @@ import '../events/create_event_location_screen.dart';
 import '../home/widgets/event_preview_participants_row.dart';
 import '../home/widgets/preview_participant.dart';
 
+import '../../app_route_observer.dart';
 import '../../utils/icon_helper.dart';
 
 /// Комнаты: вкладка «Участвую» (RSVP) и «Создал» (мои события).
@@ -34,7 +35,7 @@ class _ParticipantsData {
 }
 
 class _MyRoomsScreenState extends State<MyRoomsScreen>
-    with SingleTickerProviderStateMixin {
+    with RouteAware, SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   List<Event> _roomsParticipating = [];
@@ -55,9 +56,25 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) {
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
   void dispose() {
+    appRouteObserver.unsubscribe(this);
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Сняли чат/детали — перезапрашиваем списки, иначе «Участвую» остаётся устаревшим.
+  @override
+  void didPopNext() {
+    _refreshAll();
   }
 
   Future<void> _refreshAll() async {

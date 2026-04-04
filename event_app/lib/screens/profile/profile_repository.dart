@@ -9,6 +9,16 @@ import 'profile_social_models.dart';
 class ProfileRepository {
   ProfileRepository._();
 
+  /// Полный выход: очистить кеш авторизации и событий и дождаться записи на диск.
+  static Future<void> clearSession() async {
+    final auth = Hive.box('authBox');
+    final events = Hive.box('eventsBox');
+    await auth.clear();
+    await auth.flush();
+    await events.clear();
+    await events.flush();
+  }
+
   static Future<ProfileMe> fetchMe() async {
     final data = await ApiClient.instance.get('/users/me', withAuth: true);
     return ProfileMe.fromApi(data);

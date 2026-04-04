@@ -1,8 +1,60 @@
 import { Router } from 'express';
+import type { PoolClient } from 'pg';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+/** Те же going_users / not_going_users, что у GET /events/:id — для списков «мои комнаты» / «создал». */
+async function attachRsvpListsToEventRows(
+  client: PoolClient,
+  rows: Record<string, unknown>[],
+): Promise<void> {
+  if (rows.length === 0) return;
+  const ids = rows.map((r) => r.id as string);
+
+  const going = await client.query(
+    `
+    SELECT r.event_id, u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+    FROM event_rsvp r
+    JOIN users u ON u.id = r.user_id
+    WHERE r.event_id = ANY($1::uuid[]) AND r.status = 1
+    ORDER BY r.event_id, r.updated_at DESC
+    `,
+    [ids],
+  );
+  const notGoing = await client.query(
+    `
+    SELECT r.event_id, u.id, u.email, u.username, u.display_name, u.avatar_url, u.status
+    FROM event_rsvp r
+    JOIN users u ON u.id = r.user_id
+    WHERE r.event_id = ANY($1::uuid[]) AND r.status = -1
+    ORDER BY r.event_id, r.updated_at ASC
+    `,
+    [ids],
+  );
+
+  const mapGoing = new Map<string, Record<string, unknown>[]>();
+  for (const row of going.rows) {
+    const eid = row.event_id as string;
+    const { event_id: _e, ...user } = row;
+    if (!mapGoing.has(eid)) mapGoing.set(eid, []);
+    mapGoing.get(eid)!.push(user as Record<string, unknown>);
+  }
+  const mapNotGoing = new Map<string, Record<string, unknown>[]>();
+  for (const row of notGoing.rows) {
+    const eid = row.event_id as string;
+    const { event_id: _e, ...user } = row;
+    if (!mapNotGoing.has(eid)) mapNotGoing.set(eid, []);
+    mapNotGoing.get(eid)!.push(user as Record<string, unknown>);
+  }
+
+  for (const row of rows) {
+    const id = row.id as string;
+    row.going_users = mapGoing.get(id) ?? [];
+    row.not_going_users = mapNotGoing.get(id) ?? [];
+  }
+}
 
 // Тип для новости
 interface NewsItem {
@@ -233,7 +285,9 @@ router.get('/my/rooms', authMiddleware, async (req: AuthRequest, res) => {
       `,
       [userId],
     );
-    return res.json(result.rows);
+    const rows = result.rows as Record<string, unknown>[];
+    await attachRsvpListsToEventRows(client, rows);
+    return res.json(rows);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -266,7 +320,9 @@ router.get('/my/created', authMiddleware, async (req: AuthRequest, res) => {
       `,
       [userId],
     );
-    return res.json(result.rows);
+    const rows = result.rows as Record<string, unknown>[];
+    await attachRsvpListsToEventRows(client, rows);
+    return res.json(rows);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);

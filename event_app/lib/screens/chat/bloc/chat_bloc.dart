@@ -46,6 +46,15 @@ class ChatBloc extends ChangeNotifier {
   String? jumpHighlightedMessageId;
   Timer? _jumpHighlightTimer;
 
+  /// Пузырь, для которого открыто меню действий (копировать, ответить…).
+  String? messageActionsMenuOpenForId;
+
+  void setMessageActionsMenuOpen(String? messageId) {
+    if (messageActionsMenuOpenForId == messageId) return;
+    messageActionsMenuOpenForId = messageId;
+    notifyListeners();
+  }
+
   void _flashJumpHighlight(String messageId) {
     _jumpHighlightTimer?.cancel();
     jumpHighlightedMessageId = messageId;
@@ -61,6 +70,12 @@ class ChatBloc extends ChangeNotifier {
       _jumpHighlightTimer?.cancel();
       jumpHighlightedMessageId = null;
       notifyListeners();
+    }
+  }
+
+  void _clearMessageActionsMenuIfMessageRemoved(String messageId) {
+    if (messageActionsMenuOpenForId == messageId) {
+      messageActionsMenuOpenForId = null;
     }
   }
 
@@ -156,28 +171,36 @@ class ChatBloc extends ChangeNotifier {
   bool isScrolledToBottom() {
     if (!scrollController.hasClients) return true;
     final p = scrollController.position;
-    const edge = 56.0;
+    if (!p.hasPixels) return true;
     if (p.maxScrollExtent <= 0) return true;
-    return p.pixels <= edge;
+    const tolerancePx = 100.0;
+    return p.extentBefore <= tolerancePx;
+  }
+
+  EventMessage? _anchorMessageForView() {
+    for (var i = messages.length - 1; i >= 0; i--) {
+      if (!messages[i].id.startsWith('temp_')) return messages[i];
+    }
+    return null;
   }
 
   Future<void> markMessagesViewedIfNeeded() async {
     if (messages.isEmpty || myId == null || error != null) return;
-    final last = messages.last;
-    if (last.id.startsWith('temp_')) return;
+    final anchor = _anchorMessageForView();
+    if (anchor == null) return;
     if (!isScrolledToBottom()) return;
-    if (lastMarkedViewUpToId == last.id) return;
+    if (lastMarkedViewUpToId == anchor.id) return;
 
     try {
-      await _repository.markMessagesViewed(last.id);
-      lastMarkedViewUpToId = last.id;
+      await _repository.markMessagesViewed(anchor.id);
+      lastMarkedViewUpToId = anchor.id;
       notifyListeners();
     } catch (_) {}
   }
 
   void _scheduleMarkViewed() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Future<void>.delayed(const Duration(milliseconds: 350), () {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         markMessagesViewedIfNeeded();
       });
     });
@@ -392,6 +415,7 @@ class ChatBloc extends ChangeNotifier {
       sentStatus.remove(msg.id);
       tempIds.remove(msg.id);
       _clearJumpHighlightIfMessageRemoved(msg.id);
+      _clearMessageActionsMenuIfMessageRemoved(msg.id);
       _pruneMessageKeys();
       notifyListeners();
       return;
@@ -401,6 +425,7 @@ class ChatBloc extends ChangeNotifier {
       await _repository.deleteMessage(msg.id);
       messages.removeWhere((m) => m.id == msg.id);
       _clearJumpHighlightIfMessageRemoved(msg.id);
+      _clearMessageActionsMenuIfMessageRemoved(msg.id);
       _pruneMessageKeys();
       notifyListeners();
     } catch (e) {

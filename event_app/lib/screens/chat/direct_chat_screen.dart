@@ -1,38 +1,16 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:hive_flutter/hive_flutter.dart';
-import 'package:intl/intl.dart';
 
+import '../../models/event_message.dart';
 import '../../services/api_client.dart';
 import '../profile/profile_avatar.dart';
-import '../profile/profile_screen.dart';
-
-class DirectMessage {
-  const DirectMessage({
-    required this.id,
-    required this.fromUserId,
-    required this.toUserId,
-    required this.text,
-    required this.createdAt,
-  });
-
-  factory DirectMessage.fromApi(Map<String, dynamic> map) {
-    return DirectMessage(
-      id: map['id'].toString(),
-      fromUserId: map['from_user_id'].toString(),
-      toUserId: map['to_user_id'].toString(),
-      text: (map['text'] as String?) ?? '',
-      createdAt: DateTime.tryParse(map['created_at']?.toString() ?? '') ?? DateTime.now(),
-    );
-  }
-
-  final String id;
-  final String fromUserId;
-  final String toUserId;
-  final String text;
-  final DateTime createdAt;
-}
+import 'bloc/direct_chat_bloc.dart';
+import 'chat_appearance.dart';
+import 'widgets/direct_chat_app_bar.dart';
+import 'widgets/direct_chat_body.dart';
+import 'widgets/direct_chat_input.dart';
+import 'widgets/message_actions_dialog.dart';
 
 class DirectChatScreen extends StatefulWidget {
   const DirectChatScreen({
@@ -49,22 +27,11 @@ class DirectChatScreen extends StatefulWidget {
 }
 
 class _DirectChatScreenState extends State<DirectChatScreen> {
-  final TextEditingController _textController = TextEditingController();
-  final ScrollController _scrollController = ScrollController();
-  List<DirectMessage> _messages = [];
-  bool _loading = true;
-  bool _sending = false;
-  String? _error;
-  Timer? _pollTimer;
+  late DirectChatBloc _bloc;
 
-  /// Имя для шапки: display_name, иначе email, иначе переданный title.
   String? _peerHeaderName;
   String? _peerAvatarResolved;
-
-  String? get _myUserId {
-    final id = Hive.box('authBox').get('userId') as String?;
-    return id?.trim().isEmpty == true ? null : id?.trim();
-  }
+  String? _peerUsername;
 
   String get _titleForAppBar {
     final n = _peerHeaderName?.trim();
@@ -75,7 +42,21 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   String _initialLetter(String text) {
     final t = text.trim();
     if (t.isEmpty) return '?';
-    return t.characters.first.toUpperCase();
+    return String.fromCharCode(t.runes.first).toUpperCase();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _bloc = DirectChatBloc(
+      peerUserId: widget.userId,
+      initialPeerTitle: widget.title,
+    );
+    _bloc.onShowMyMessageActions = _showMyMessageActions;
+    _bloc.onShowCopyMenu = _showCopyMenu;
+    _bloc.onShowError = _showToast;
+    unawaited(_bloc.init());
+    _loadPeerProfile();
   }
 
   Future<void> _loadPeerProfile() async {
@@ -99,251 +80,138 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       if (!mounted) return;
       setState(() {
         _peerHeaderName = headerName;
+        _peerUsername = username;
         _peerAvatarResolved = resolveAvatarUrl(rawAvatar);
       });
-    } catch (_) {
-      // оставляем widget.title и без аватара
-    }
-  }
-
-  Future<void> _loadMessages() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final list = await ApiClient.instance.getList(
-        '/messages/with/${widget.userId}',
-        withAuth: true,
+      _bloc.setPeerProfile(
+        displayName: headerName,
+        email: email,
+        avatarUrl: _peerAvatarResolved,
       );
-      final msgs =
-          list.map((e) => DirectMessage.fromApi(e as Map<String, dynamic>)).toList(growable: false);
-      setState(() {
-        _messages = msgs;
-        _loading = false;
-      });
-      _scrollToEnd();
-    } on ApiException catch (e) {
-      setState(() {
-        _loading = false;
-        _messages = [];
-        _error = e.statusCode == 403 ? 'Пользователь не принимает сообщения' : e.message;
-      });
-    } catch (e) {
-      setState(() {
-        _loading = false;
-        _messages = [];
-        _error = e.toString();
-      });
-    }
+    } catch (_) {}
   }
 
-  void _scrollToEnd() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-      }
-    });
-  }
-
-  Future<void> _send() async {
-    final text = _textController.text.trim();
-    if (text.isEmpty || _sending) return;
-    _textController.clear();
-    setState(() => _sending = true);
-    try {
-      final data = await ApiClient.instance.post(
-        '/messages/with/${widget.userId}',
-        body: {'text': text},
-        withAuth: true,
-      );
-      final msg = DirectMessage.fromApi(data);
-      setState(() {
-        _sending = false;
-        _messages = [..._messages, msg];
-      });
-      _scrollToEnd();
-    } on ApiException catch (e) {
-      setState(() => _sending = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.statusCode == 403 ? 'Нельзя написать пользователю' : e.message)),
-        );
-      }
-      _textController.text = text;
-    } catch (e) {
-      setState(() => _sending = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
-      }
-      _textController.text = text;
-    }
-  }
-
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      try {
-        final list = await ApiClient.instance.getList(
-          '/messages/with/${widget.userId}',
-          withAuth: true,
-        );
-        final msgs = list
-            .map((e) => DirectMessage.fromApi(e as Map<String, dynamic>))
-            .toList(growable: false);
-        if (!mounted) return;
-        if (msgs.isNotEmpty && (_messages.isEmpty || msgs.last.id != _messages.last.id)) {
-          setState(() => _messages = msgs);
-          _scrollToEnd();
+  void _showMyMessageActions(
+    Offset anchorGlobalPosition,
+    EventMessage msg,
+    bool isSending,
+  ) {
+    _bloc.setMessageActionsMenuOpen(msg.id);
+    MessageActionsDialog.showDirectMyMessageActions(
+      context,
+      msg,
+      isSending,
+      () => _bloc.startEditingMessage(msg),
+      () => _bloc.startReplyTo(msg),
+      () async {
+        final ok = await MessageActionsDialog.showDeleteConfirmation(context);
+        if (ok == true && mounted) {
+          await _bloc.deleteMessage(msg);
         }
-      } catch (_) {
-        // ignore polling errors
-      }
+      },
+    ).whenComplete(() {
+      if (mounted) _bloc.setMessageActionsMenuOpen(null);
     });
   }
 
-  @override
-  void initState() {
-    super.initState();
-    _loadPeerProfile();
-    _loadMessages().then((_) => _startPolling());
+  void _showCopyMenu(Offset anchorGlobalPosition, EventMessage msg) {
+    _bloc.setMessageActionsMenuOpen(msg.id);
+    MessageActionsDialog.showParticipantMessageActions(
+      context,
+      msg,
+      () => _bloc.startReplyTo(msg),
+    ).whenComplete(() {
+      if (mounted) _bloc.setMessageActionsMenuOpen(null);
+    });
+  }
+
+  void _showToast(String message) {
+    final scheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: scheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        content: Text(
+          message,
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: scheme.onSurface,
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
-    _textController.dispose();
-    _scrollController.dispose();
+    _bloc.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final myId = _myUserId;
-    final df = DateFormat('HH:mm');
+    final chat = EventChatTheme.of(context);
+    final subtitle = (_peerUsername != null && _peerUsername!.isNotEmpty)
+        ? '@${_peerUsername!}'
+        : null;
 
     return Scaffold(
-      appBar: AppBar(
-        titleSpacing: 8,
-        title: Row(
+      backgroundColor: chat.scaffold,
+      extendBodyBehindAppBar: true,
+      appBar: DirectChatAppBar(
+        peerUserId: widget.userId,
+        title: _titleForAppBar,
+        subtitle: subtitle,
+        avatarUrl: _peerAvatarResolved,
+        titleLetter: _initialLetter(_titleForAppBar),
+      ),
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () {
+          _bloc.inputFocusNode.unfocus();
+          FocusManager.instance.primaryFocus?.unfocus();
+        },
+        child: Stack(
+          alignment: Alignment.bottomCenter,
           children: [
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-              backgroundImage: _peerAvatarResolved != null
-                  ? NetworkImage(_peerAvatarResolved!)
-                  : null,
-              child: _peerAvatarResolved == null
-                  ? Text(
-                      _initialLetter(_titleForAppBar),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    )
-                  : null,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                _titleForAppBar,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+            Positioned.fill(child: DirectChatBody(bloc: _bloc)),
+            Positioned(
+              left: 0,
+              right: 0,
+              top: 0,
+              height: EventChatTheme.appBarTopShadowExtent,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: chat.appBarTopShadowGradient,
+                  ),
+                ),
               ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: EventChatTheme.inputBottomShadowExtent,
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: chat.inputBottomShadowGradient,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: DirectChatInput(bloc: _bloc),
             ),
           ],
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Профиль',
-            icon: const Icon(Icons.person_outline),
-            onPressed: () {
-              Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => ProfileScreen(userId: widget.userId),
-                ),
-              );
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _error != null
-                    ? Center(child: Text(_error!))
-                    : ListView.builder(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, i) {
-                          final m = _messages[i];
-                          final mine = myId != null && m.fromUserId == myId;
-                          return Align(
-                            alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                            child: Container(
-                              margin: const EdgeInsets.symmetric(vertical: 4),
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                              constraints: const BoxConstraints(maxWidth: 320),
-                              decoration: BoxDecoration(
-                                color: mine ? Theme.of(context).colorScheme.primaryContainer : null,
-                                border: Border.all(color: Colors.black12),
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Column(
-                                crossAxisAlignment:
-                                    mine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                                children: [
-                                  Text(m.text),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    df.format(m.createdAt),
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(color: Colors.black54),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-          ),
-          SafeArea(
-            top: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Сообщение…',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _sending ? null : _send,
-                    child: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Отпр.'),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 }
-
