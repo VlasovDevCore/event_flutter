@@ -110,9 +110,13 @@ class ApiClient {
 
   Future<Map<String, dynamic>> delete(
     String path, {
+    Map<String, dynamic>? body,
     bool withAuth = false,
   }) async {
     final headers = <String, String>{};
+    if (body != null) {
+      headers['Content-Type'] = 'application/json';
+    }
     if (withAuth) {
       final authBox = Hive.box('authBox');
       final token = authBox.get('token') as String?;
@@ -122,7 +126,11 @@ class ApiClient {
     }
 
     final res = await _withTimeout(
-      http.delete(_uri(path), headers: headers),
+      http.delete(
+        _uri(path),
+        headers: headers,
+        body: body != null ? jsonEncode(body) : null,
+      ),
     );
 
     final data = res.body.isNotEmpty

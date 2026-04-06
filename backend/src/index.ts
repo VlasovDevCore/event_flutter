@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import { pool, testConnection } from './db';
+import { initFirebaseAdmin, notifyEventChatMessage } from './services/push';
 import authRouter from './routes/auth';
 import eventsRouter from './routes/events';
 import blocksRouter from './routes/blocks';
@@ -14,6 +15,7 @@ import usersRouter from './routes/users';
 import messagesRouter from './routes/messages';
 
 dotenv.config();
+initFirebaseAdmin();
 
 const PORT = Number(process.env.PORT || 4000);
 
@@ -140,8 +142,22 @@ io.on('connection', (socket) => {
           [eventId, userId, text.trim(), rid],
         );
 
-        const msg = insert.rows[0];
+        const msg = insert.rows[0] as Record<string, unknown>;
         io.to(`event:${eventId}`).emit('newMessage', msg);
+
+        const titleR = await client.query(`SELECT title FROM events WHERE id = $1`, [eventId]);
+        const eventTitle = String(titleR.rows[0]?.title ?? '').trim();
+        const dn = String(msg.user_display_name ?? '').trim();
+        const em = String(msg.user_email ?? '').trim();
+        const senderLabel = dn || em || 'Участник';
+        void notifyEventChatMessage({
+          eventId,
+          eventTitle,
+          messageId: msg.id as string,
+          senderUserId: userId,
+          senderLabel,
+          text: text.trim(),
+        });
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error(err);

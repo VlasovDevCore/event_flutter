@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1022779621360",
+    "project_id": "metochka-moszapusk",
+    "storage_bucket": "metochka-moszapusk.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1022779621360:android:cb1bef0432abcf39946735",
+        "android_client_info": {
+          "package_name": "com.metochka.moszapusk"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD4CLH4k-6iwinElQVTm6fdrryasi9i-SQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

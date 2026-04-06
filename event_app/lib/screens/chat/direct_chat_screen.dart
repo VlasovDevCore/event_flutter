@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../models/event_message.dart';
 import '../../services/api_client.dart';
+import '../../services/chat_presence_tracker.dart';
 import '../profile/profile_avatar.dart';
 import 'bloc/direct_chat_bloc.dart';
 import 'chat_appearance.dart';
@@ -48,6 +49,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   @override
   void initState() {
     super.initState();
+    ChatPresenceTracker.instance.setDirectPeer(widget.userId);
     _bloc = DirectChatBloc(
       peerUserId: widget.userId,
       initialPeerTitle: widget.title,
@@ -146,6 +148,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
 
   @override
   void dispose() {
+    ChatPresenceTracker.instance.setDirectPeer(null);
     _bloc.dispose();
     super.dispose();
   }

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type { PoolClient } from 'pg';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { notifyEventChatMessage } from '../services/push';
 
 const router = Router();
 
@@ -556,7 +557,11 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
 
 // Отправить сообщение в чат события — только для участников (RSVP «приду»)
 router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
-  const { id: eventId } = req.params;
+  const idParam = req.params.id;
+  const eventId = (Array.isArray(idParam) ? idParam[0] : idParam) ?? '';
+  if (!eventId) {
+    return res.status(400).json({ error: 'Invalid event id' });
+  }
   const userId = req.user?.id;
   const { text, reply_to_id: replyToIdRaw } = req.body as {
     text?: string;
@@ -627,6 +632,20 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
     if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {
       (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to(`event:${eventId}`).emit('newMessage', row);
     }
+
+    const titleR = await client.query(`SELECT title FROM events WHERE id = $1`, [eventId]);
+    const eventTitle = String(titleR.rows[0]?.title ?? '').trim();
+    const dn = String(row.user_display_name ?? '').trim();
+    const em = String(row.user_email ?? '').trim();
+    const senderLabel = dn || em || 'Участник';
+    void notifyEventChatMessage({
+      eventId,
+      eventTitle,
+      messageId: row.id as string,
+      senderUserId: userId,
+      senderLabel,
+      text: text.trim(),
+    });
 
     return res.status(201).json(row);
   } catch (err) {

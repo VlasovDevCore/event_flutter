@@ -1,19 +1,20 @@
 import 'dart:async';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:app_links/app_links.dart';
 
 import 'app_route_observer.dart';
+import 'navigation/app_navigator.dart';
 import 'screens/auth/auth_screen.dart';
 import 'screens/home/home_screen.dart';
-import 'screens/profile/profile_screen.dart';
-
-final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+import 'services/push_notifications_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
   await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
 
@@ -32,6 +33,8 @@ Future<void> main() async {
   await Hive.openBox('authBox');
   await Hive.openBox('eventsBox');
 
+  unawaited(PushNotificationsService.instance.bootstrap());
+
   runApp(const EventApp());
 }
 
@@ -45,7 +48,7 @@ class EventApp extends StatelessWidget {
     final isLoggedIn = token != null && token.isNotEmpty;
 
     return MaterialApp(
-      navigatorKey: _navigatorKey,
+      navigatorKey: appNavigatorKey,
       navigatorObservers: [appRouteObserver],
       title: 'Events',
       locale: const Locale('ru'),

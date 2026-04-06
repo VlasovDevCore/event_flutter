@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../models/event.dart';
+import '../../services/chat_presence_tracker.dart';
 import '../../models/event_message.dart';
 import 'bloc/chat_bloc.dart';
 import 'chat_appearance.dart';
@@ -23,8 +24,16 @@ class _EventChatScreenState extends State<EventChatScreen> {
   @override
   void initState() {
     super.initState();
+    ChatPresenceTracker.instance.setEventChat(widget.event.id);
     _bloc = ChatBloc(event: widget.event);
     _bloc.init();
+  }
+
+  @override
+  void dispose() {
+    ChatPresenceTracker.instance.setEventChat(null);
+    _bloc.dispose();
+    super.dispose();
   }
 
   @override
@@ -104,12 +113,6 @@ class _EventChatScreenState extends State<EventChatScreen> {
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _bloc.dispose();
-    super.dispose();
   }
 
   @override

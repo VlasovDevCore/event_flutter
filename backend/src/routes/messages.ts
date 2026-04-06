@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { notifyDirectMessage } from '../services/push';
 
 const router = Router();
 
@@ -320,6 +321,17 @@ router.post('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
       `${directMessageSelectWithView()} WHERE m.id = $3`,
       [me, other, newId],
     );
+    const row = full.rows[0] as Record<string, unknown>;
+    const dn = String(row.user_display_name ?? '').trim();
+    const em = String(row.user_email ?? '').trim();
+    const senderLabel = dn || em || 'Сообщение';
+    void notifyDirectMessage({
+      recipientUserId: other,
+      senderUserId: me,
+      senderLabel,
+      messageId: newId,
+      text: text.trim(),
+    });
     return res.status(201).json(full.rows[0]);
   } catch (err) {
     // eslint-disable-next-line no-console

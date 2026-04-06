@@ -408,6 +408,62 @@ router.get('/me/achievements', authMiddleware, async (req: AuthRequest, res) => 
   }
 });
 
+// Регистрация FCM-токена устройства (push о новых сообщениях)
+router.post('/me/push-token', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  const { token, platform } = req.body as { token?: string; platform?: string };
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    return res.status(400).json({ error: 'token обязателен' });
+  }
+  const p =
+    platform === 'ios' ? 'ios' : platform === 'web' ? 'web' : 'android';
+
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `
+      INSERT INTO user_push_tokens (user_id, token, platform, updated_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (user_id, token)
+      DO UPDATE SET platform = EXCLUDED.platform, updated_at = now()
+      `,
+      [userId, token.trim(), p],
+    );
+    return res.json({ success: true });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/me/push-token', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  const { token } = req.body as { token?: string };
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!token || typeof token !== 'string' || token.trim() === '') {
+    return res.status(400).json({ error: 'token обязателен' });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query(`DELETE FROM user_push_tokens WHERE user_id = $1 AND token = $2`, [
+      userId,
+      token.trim(),
+    ]);
+    return res.json({ success: true });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 router.get('/check-username', async (req, res) => {
   const { username } = req.query;
   

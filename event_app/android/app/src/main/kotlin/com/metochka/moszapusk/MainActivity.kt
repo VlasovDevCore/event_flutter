@@ -1,4 +1,4 @@
-package com.example.event_app
+package com.metochka.moszapusk
 
 import io.flutter.embedding.android.FlutterActivity
 

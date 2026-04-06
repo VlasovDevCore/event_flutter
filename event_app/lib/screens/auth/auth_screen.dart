@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
+import '../../services/push_notifications_service.dart';
 import '../home/home_screen.dart';
 
 class AuthScreen extends StatefulWidget {
@@ -117,6 +118,8 @@ class _AuthScreenState extends State<AuthScreen> {
 
       // Загружаем полный профиль с сервера
       await _loadFullUserProfile();
+
+      await PushNotificationsService.instance.registerTokenAfterLogin();
 
       if (!mounted) return;
       Navigator.of(

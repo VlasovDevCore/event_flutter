@@ -1,6 +1,7 @@
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
+import '../../services/push_notifications_service.dart';
 import 'profile_achievement.dart';
 import 'profile_models.dart';
 import 'profile_social_models.dart';
@@ -11,6 +12,7 @@ class ProfileRepository {
 
   /// Полный выход: очистить кеш авторизации и событий и дождаться записи на диск.
   static Future<void> clearSession() async {
+    await PushNotificationsService.instance.unregisterTokenOnLogout();
     final auth = Hive.box('authBox');
     final events = Hive.box('eventsBox');
     await auth.clear();

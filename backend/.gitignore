@@ -17,6 +17,10 @@
 /.vscode/
 /.idea/
 
+# Firebase Admin SDK (ключ сервисного аккаунта — не коммитить)
+firebase-adminsdk*.json
+*-firebase-adminsdk*.json
+
 # OS
 .DS_Store
 Thumbs.db
