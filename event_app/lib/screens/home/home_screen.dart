@@ -42,6 +42,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   LatLng? _userPosition;
   List<Event> _visibleEvents = [];
   Event? _selectedEventPreview;
+  Event? _closingEventPreview;
+  Event? _pendingEventPreview;
+  bool _isClosingPreview = false;
   bool _previewLoading = false;
   bool _isLoadingEvents = false;
   bool _backPressedRecently = false;
@@ -111,6 +114,47 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _fetchEventUnreadCount();
     _fetchIncomingFriendRequestsCount();
     _fetchUnreadNewsFlag();
+  }
+
+  void _closePreviewAnimated() {
+    if (_selectedEventPreview == null || _isClosingPreview) return;
+    setState(() {
+      _closingEventPreview = _selectedEventPreview;
+      _isClosingPreview = true;
+      _selectedEventPreview = null;
+      _pendingEventPreview = null;
+    });
+
+    Future<void>.delayed(const Duration(milliseconds: 220)).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _closingEventPreview = null;
+        _isClosingPreview = false;
+      });
+    });
+  }
+
+  void _switchPreviewAnimated(Event next) {
+    final current = _selectedEventPreview;
+    if (current == null) return;
+    if (current.id == next.id) return;
+
+    setState(() {
+      _closingEventPreview = current;
+      _pendingEventPreview = next;
+      _isClosingPreview = true;
+      _selectedEventPreview = null;
+    });
+
+    Future<void>.delayed(const Duration(milliseconds: 220)).then((_) {
+      if (!mounted) return;
+      setState(() {
+        _closingEventPreview = null;
+        _isClosingPreview = false;
+        _selectedEventPreview = _pendingEventPreview;
+        _pendingEventPreview = null;
+      });
+    });
   }
 
   @override
@@ -345,10 +389,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _openEventPreview(Event event) async {
-    setState(() {
-      _selectedEventPreview = event;
-      _previewLoading = true;
-    });
+    // If we are mid-close animation, just queue the next preview and start loading its data.
+    if (_isClosingPreview) {
+      setState(() {
+        _pendingEventPreview = event;
+        _previewLoading = true;
+      });
+    } else if (_selectedEventPreview != null &&
+        _selectedEventPreview!.id != event.id) {
+      _switchPreviewAnimated(event);
+      setState(() => _previewLoading = true);
+    } else {
+      if (_selectedEventPreview == null) {
+        setState(() => _selectedEventPreview = event);
+      }
+      setState(() => _previewLoading = true);
+    }
 
     try {
       final data = await ApiClient.instance.get(
@@ -360,10 +416,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       if (!mounted) return;
       setState(() {
         _events = _events.map((e) => e.id == loaded.id ? loaded : e).toList();
-        if (_selectedEventPreview != null &&
-            _selectedEventPreview!.id == loaded.id) {
-          _selectedEventPreview = loaded;
-        }
+        if (_selectedEventPreview?.id == loaded.id) _selectedEventPreview = loaded;
+        if (_pendingEventPreview?.id == loaded.id) _pendingEventPreview = loaded;
         _previewLoading = false;
       });
     } catch (_) {
@@ -603,23 +657,22 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ),
           if (showBadge)
             Positioned(
-              right: -2,
-              top: -2,
+              right: -4,
+              top: -4,
               child: Container(
                 constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                padding: const EdgeInsets.symmetric(horizontal: 5),
+                padding: const EdgeInsets.all(3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE53935),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: const Color(0xFF161616), width: 2),
+                  color: Colors.white,
+                  shape: BoxShape.circle,
                 ),
                 child: Text(
                   label,
                   style: const TextStyle(
-                    color: Colors.white,
+                    color: Colors.black,
                     fontSize: 10,
                     fontWeight: FontWeight.w700,
-                    height: 1.1,
+                    height: 0,
                   ),
                   textAlign: TextAlign.center,
                 ),
@@ -759,7 +812,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             fieldName: 'image',
             withAuth: true,
           );
-          final imageUrl = (uploaded['image_url'] ?? uploaded['imageUrl'])?.toString();
+          final imageUrl = (uploaded['image_url'] ?? uploaded['imageUrl'])
+              ?.toString();
           if (imageUrl != null && imageUrl.trim().isNotEmpty && mounted) {
             setState(() {
               _events = _events.map((e) {
@@ -876,10 +930,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 ),
                 onTap: (_, __) {
                   if (_selectedEventPreview == null) return;
-                  setState(() {
-                    _selectedEventPreview = null;
-                    _previewLoading = false;
-                  });
+                  setState(() => _previewLoading = false);
+                  _closePreviewAnimated();
                 },
                 onPositionChanged: (position, hasGesture) {
                   _scheduleRecomputeVisibleEvents();
@@ -1034,11 +1086,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                           ),
                           if (_hasUnreadNews)
                             Positioned(
-                              right: -2,
-                              top: -2,
+                              right: -13,
+                              top: -13,
                               child: Container(
-                                width: 8,
-                                height: 8,
+                                width: 12,
+                                height: 12,
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   shape: BoxShape.circle,
@@ -1069,7 +1121,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   _mapRoundIconButton(
                     icon: Icons.chat,
-                    badgeCount: _eventUnreadCount > 0 ? _eventUnreadCount : null,
+                    badgeCount: _eventUnreadCount > 0
+                        ? _eventUnreadCount
+                        : null,
                     onPressed: () {
                       Navigator.of(context)
                           .push(
@@ -1097,15 +1151,16 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   _mapRoundIconButton(
                     icon: Icons.forum_outlined,
-                    badgeCount:
-                        _directUnreadCount > 0 ? _directUnreadCount : null,
+                    badgeCount: _directUnreadCount > 0
+                        ? _directUnreadCount
+                        : null,
                     onPressed: () {
                       Navigator.of(context)
                           .push<void>(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const DirectChatPickerScreen(),
-                        ),
-                      )
+                            MaterialPageRoute<void>(
+                              builder: (_) => const DirectChatPickerScreen(),
+                            ),
+                          )
                           .then((_) => _fetchDirectUnreadCount());
                     },
                   ),
@@ -1161,15 +1216,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
                       await _addEvent(created);
                     },
-                    child: const Icon(Icons.add, color: Colors.white),
+                    child: const Icon(Icons.add, color: Colors.white, size: 24),
                   ),
                 ),
               ),
             ),
+            if (_selectedEventPreview != null && !_isClosingPreview)
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTap: () {
+                    _closePreviewAnimated();
+                  },
+                  child: const SizedBox.expand(),
+                ),
+              ),
             AnimatedOpacity(
-              opacity: _selectedEventPreview == null ? 0 : 1,
+              opacity:
+                  (_selectedEventPreview == null && _closingEventPreview == null)
+                      ? 0
+                      : 1,
               duration: const Duration(milliseconds: 180),
-              child: _selectedEventPreview == null
+              child: (_selectedEventPreview == null && _closingEventPreview == null)
                   ? const SizedBox.shrink()
                   : Align(
                       alignment: Alignment.bottomCenter,
@@ -1182,7 +1250,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         ),
                         child: Builder(
                           builder: (context) {
-                            final event = _selectedEventPreview!;
+                            final event =
+                                _selectedEventPreview ?? _closingEventPreview!;
+                            final showingClosing =
+                                _selectedEventPreview == null &&
+                                _closingEventPreview != null;
                             final remaining = event.endsAt == null
                                 ? null
                                 : event.endsAt!.difference(DateTime.now());
@@ -1211,27 +1283,62 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                                 );
                             final markerColor = Color(event.markerColorValue);
 
-                            return EventPreviewCard(
-                              event: event,
-                              previewLoading: _previewLoading,
-                              remainingLabel: remainingLabel,
-                              iconLabel: iconLabel,
-                              markerColor: markerColor,
-                              participants: participants,
-                              totalGoing: totalGoing,
-                              isGoing: isGoing,
-                              onRsvpToggle: (status) =>
-                                  _updateRsvpStatus(event, status),
-                              onOpenDetails: () {
-                                Navigator.of(context)
-                                    .push(
-                                      MaterialPageRoute(
-                                        builder: (_) =>
-                                            EventDetailsScreen(event: event),
-                                      ),
-                                    )
-                                    .then((_) => _refreshEventById(event.id));
-                              },
+                            return AnimatedSlide(
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeInOut,
+                              offset: showingClosing
+                                  ? const Offset(1.1, 0)
+                                  : Offset.zero,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 200),
+                                switchInCurve: Curves.easeOut,
+                                switchOutCurve: Curves.easeIn,
+                                transitionBuilder: (child, anim) {
+                                  final slide = Tween<Offset>(
+                                    begin: const Offset(0, 0.12),
+                                    end: Offset.zero,
+                                  ).animate(anim);
+                                  return FadeTransition(
+                                    opacity: anim,
+                                    child: SlideTransition(position: slide, child: child),
+                                  );
+                                },
+                                child: Dismissible(
+                                  key: ValueKey('event-preview-${event.id}'),
+                                  direction: DismissDirection.horizontal,
+                                  background: const SizedBox.shrink(),
+                                  secondaryBackground: const SizedBox.shrink(),
+                                  onDismissed: (_) {
+                                    if (!mounted) return;
+                                    setState(() => _selectedEventPreview = null);
+                                  },
+                                  child: EventPreviewCard(
+                                    key: ValueKey('event-preview-card-${event.id}'),
+                                    event: event,
+                                    previewLoading: _previewLoading,
+                                    remainingLabel: remainingLabel,
+                                    iconLabel: iconLabel,
+                                    markerColor: markerColor,
+                                    participants: participants,
+                                    totalGoing: totalGoing,
+                                    isGoing: isGoing,
+                                    onRsvpToggle: (status) =>
+                                        _updateRsvpStatus(event, status),
+                                    onOpenDetails: () {
+                                      Navigator.of(context)
+                                          .push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  EventDetailsScreen(event: event),
+                                            ),
+                                          )
+                                          .then(
+                                            (_) => _refreshEventById(event.id),
+                                          );
+                                    },
+                                  ),
+                                ),
+                              ),
                             );
                           },
                         ),

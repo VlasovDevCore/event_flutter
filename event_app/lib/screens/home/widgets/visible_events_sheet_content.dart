@@ -22,7 +22,8 @@ class VisibleEventsSheetContent extends StatefulWidget {
   final EdgeInsets sheetPadding;
 
   @override
-  State<VisibleEventsSheetContent> createState() => _VisibleEventsSheetContentState();
+  State<VisibleEventsSheetContent> createState() =>
+      _VisibleEventsSheetContentState();
 }
 
 class _ParticipantsData {
@@ -58,6 +59,22 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
     }
   }
 
+  // Вспомогательный метод для склонения слова "событие"
+  String _getEventsWordForm(int count) {
+    if (count % 10 == 1 && count % 100 != 11) return 'событие';
+    if (count % 10 >= 2 &&
+        count % 10 <= 4 &&
+        (count % 100 < 10 || count % 100 >= 20))
+      return 'события';
+    return 'событий';
+  }
+
+  // Вспомогательный метод для склонения слова "ждет/ждут"
+  String _getWaitWordForm(int count) {
+    if (count % 10 == 1 && count % 100 != 11) return 'ждет';
+    return 'ждут';
+  }
+
   Future<void> _loadParticipants() async {
     if (widget.visibleEvents.isEmpty) return;
 
@@ -67,38 +84,40 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
         .toList(growable: false);
 
     try {
-      final results = await Future.wait(ids.map((id) async {
-        final data = await ApiClient.instance.get('/events/$id');
-        final event = Event.fromApiMap(data);
+      final results = await Future.wait(
+        ids.map((id) async {
+          final data = await ApiClient.instance.get('/events/$id');
+          final event = Event.fromApiMap(data);
 
-        final participants = event.goingUserProfiles.isNotEmpty
-            ? event.goingUserProfiles
-                .map(
-                  (p) => PreviewParticipant(
-                    label: p.displayName ?? p.username ?? p.email ?? 'U',
-                    avatarUrl: p.avatarUrl,
-                    status: p.status,
-                  ),
-                )
-                .toList()
-            : event.goingUsers
-                .map(
-                  (email) => PreviewParticipant(
-                    label: email,
-                    avatarUrl: null,
-                    status: 1,
-                  ),
-                )
-                .toList();
+          final participants = event.goingUserProfiles.isNotEmpty
+              ? event.goingUserProfiles
+                    .map(
+                      (p) => PreviewParticipant(
+                        label: p.displayName ?? p.username ?? p.email ?? 'U',
+                        avatarUrl: p.avatarUrl,
+                        status: p.status,
+                      ),
+                    )
+                    .toList()
+              : event.goingUsers
+                    .map(
+                      (email) => PreviewParticipant(
+                        label: email,
+                        avatarUrl: null,
+                        status: 1,
+                      ),
+                    )
+                    .toList();
 
-        return MapEntry(
-          id,
-          _ParticipantsData(
-            participants: participants,
-            totalGoing: event.goingUsers.length,
-          ),
-        );
-      }));
+          return MapEntry(
+            id,
+            _ParticipantsData(
+              participants: participants,
+              totalGoing: event.goingUsers.length,
+            ),
+          );
+        }),
+      );
 
       if (!mounted) return;
       setState(() {
@@ -173,11 +192,11 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                   'События рядом',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontFamily: 'Inter',
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
-                      ),
+                    fontFamily: 'Inter',
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
                 ),
               ],
             ),
@@ -202,9 +221,8 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                           child: Text(
                             'На карте событий нет',
                             textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: subtitleColor,
-                                ),
+                            style: Theme.of(context).textTheme.bodyMedium
+                                ?.copyWith(color: subtitleColor),
                           ),
                         ),
                       );
@@ -216,7 +234,7 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                         padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
                         child: Center(
                           child: Text(
-                            'Тусить будем?\n${events.length} поводов',
+                            'Готов начать?\n${events.length} ${_getEventsWordForm(events.length)} ${_getWaitWordForm(events.length)} тебя',
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 24,
@@ -230,20 +248,23 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                     }
 
                     final event = events[index];
-          final color = Color(event.markerColorValue);
-          final gradientStart = Color.lerp(color, Colors.white, 0.22) ?? color;
-          final gradientEnd = Color.lerp(color, Colors.black, 0.22) ?? color;
-          final icon = IconData(
-            event.markerIconCodePoint,
-            fontFamily: 'MaterialIcons',
-          );
+                    final color = Color(event.markerColorValue);
+                    final gradientStart =
+                        Color.lerp(color, Colors.white, 0.22) ?? color;
+                    final gradientEnd =
+                        Color.lerp(color, Colors.black, 0.22) ?? color;
+                    final icon = IconData(
+                      event.markerIconCodePoint,
+                      fontFamily: 'MaterialIcons',
+                    );
 
-          final date = event.endsAt ?? event.createdAt;
+                    final date = event.endsAt ?? event.createdAt;
 
-          final participantsData = _participantsByEventId[event.id];
-          final previewLoading = participantsData == null;
-          final participants = participantsData?.participants ?? const [];
-          final totalGoing = participantsData?.totalGoing ?? 0;
+                    final participantsData = _participantsByEventId[event.id];
+                    final previewLoading = participantsData == null;
+                    final participants =
+                        participantsData?.participants ?? const [];
+                    final totalGoing = participantsData?.totalGoing ?? 0;
 
                     final topCardInset = index == 0 ? 14.0 : 6.0;
                     return Padding(
@@ -302,7 +323,8 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                               subtitle: LayoutBuilder(
                                 builder: (context, constraints) {
                                   return Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
                                     children: [
                                       Row(
                                         mainAxisSize: MainAxisSize.min,
@@ -310,7 +332,9 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                                           Icon(
                                             Icons.access_time,
                                             size: 14,
-                                            color: subtitleColor.withValues(alpha: 0.9),
+                                            color: subtitleColor.withValues(
+                                              alpha: 0.9,
+                                            ),
                                           ),
                                           const SizedBox(width: 5),
                                           Text(
@@ -342,7 +366,7 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                                             participants: participants,
                                             totalGoing: totalGoing,
                                             previewLoading: previewLoading,
-                                            color: const Color(0xFF8FF5FF),
+                                            color: Colors.white,
                                           ),
                                         ),
                                       ),
@@ -373,9 +397,9 @@ class _VisibleEventsSheetContentState extends State<VisibleEventsSheetContent> {
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            Color(0xFF161616), 
+                            Color(0xFF161616),
                             Color(0xE6161616),
-                            Color(0x00161616), 
+                            Color(0x00161616),
                           ],
                         ),
                       ),

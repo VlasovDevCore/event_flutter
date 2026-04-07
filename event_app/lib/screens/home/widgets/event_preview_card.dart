@@ -135,12 +135,8 @@ class EventPreviewCard extends StatelessWidget {
                 Expanded(
                   child: FilledButton(
                     style: FilledButton.styleFrom(
-                      backgroundColor: isGoing 
-                          ? const Color(0xFF2C2C2C)  // Не приду - серый
-                          : Colors.white,            // Я приду - белый
-                      foregroundColor: isGoing 
-                          ? Colors.white             // Не приду - белый текст
-                          : Colors.black, // Я приду - синий текст
+                      backgroundColor: isGoing ? const Color(0xFF2C2C2C) : Colors.white,
+                      foregroundColor: isGoing ? Colors.white : Colors.black,
                       padding: const EdgeInsets.symmetric(vertical: 12),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12),

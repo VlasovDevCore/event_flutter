@@ -120,13 +120,16 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) {
-        return DetailEditSheet(
-          initialTitle: event.title,
-          initialDescription: event.description,
-          initialImageUrl: event.imageUrl,
-          initialColor: selectedColor,
-          initialIcon: selectedIcon,
-          onSave: (payload) => Navigator.of(context).pop(payload),
+        return FractionallySizedBox(
+          heightFactor: 0.9,
+          child: DetailEditSheet(
+            initialTitle: event.title,
+            initialDescription: event.description,
+            initialImageUrl: event.imageUrl,
+            initialColor: selectedColor,
+            initialIcon: selectedIcon,
+            onSave: (payload) => Navigator.of(context).pop(payload),
+          ),
         );
       },
     );
@@ -460,6 +463,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         children: [
           _buildBackgroundGradient(),
           SafeArea(
+            top: true,
+            bottom: true,
             child: _loading
                 ? const Center(
                     child: CircularProgressIndicator(color: Colors.white),

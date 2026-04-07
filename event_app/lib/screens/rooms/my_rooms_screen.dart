@@ -93,8 +93,10 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
   }
 
   Future<void> _loadRoomsMetaFor(List<Event> events) async {
-    final ids =
-        events.map((e) => e.id).where((id) => id.trim().isNotEmpty).toList();
+    final ids = events
+        .map((e) => e.id)
+        .where((id) => id.trim().isNotEmpty)
+        .toList();
     if (ids.isEmpty) return;
     try {
       final data = await ApiClient.instance.post(
@@ -112,8 +114,9 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
         if (v is! Map) continue;
         final unreadRaw = v['unread_count'];
         final mutedRaw = v['muted_until'];
-        final unread =
-            unreadRaw is int ? unreadRaw : int.tryParse('$unreadRaw') ?? 0;
+        final unread = unreadRaw is int
+            ? unreadRaw
+            : int.tryParse('$unreadRaw') ?? 0;
         DateTime? mutedUntil;
         if (mutedRaw is String && mutedRaw.trim().isNotEmpty) {
           mutedUntil = DateTime.tryParse(mutedRaw)?.toLocal();
@@ -404,7 +407,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
                     participants: participants,
                     totalGoing: totalGoing,
                     previewLoading: previewLoading,
-                    color: const Color(0xFF8FF5FF),
+                    color: Colors.white,
                   ),
                 ],
               ),
@@ -436,11 +439,34 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
                   ),
                   if (unread > 0)
                     Positioned(
-                      right: -6,
-                      top: -6,
-                      child: Badge(
-                        label: Text(unread > 99 ? '99+' : '$unread'),
-                        child: const SizedBox(width: 1, height: 1),
+                      right: -8,
+                      top: -8,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white, // Белый фон
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: const Color(0xFF161616), // Обводка 161616
+                            width: 1.5,
+                          ),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 12,
+                          minHeight: 12,
+                        ),
+                        child: Text(
+                          unread > 99 ? '99+' : '$unread',
+                          style: const TextStyle(
+                            color: Colors.black, // Черный текст
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                 ],
@@ -747,8 +773,8 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
             fieldName: 'image',
             withAuth: true,
           );
-          final imageUrl =
-              (uploaded['image_url'] ?? uploaded['imageUrl'])?.toString();
+          final imageUrl = (uploaded['image_url'] ?? uploaded['imageUrl'])
+              ?.toString();
           if (imageUrl != null && imageUrl.trim().isNotEmpty && mounted) {
             setState(() {
               _roomsCreated = _roomsCreated.map((e) {

@@ -114,7 +114,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
       if (!mounted) return;
       setState(() => _localImagePath = x.path);
     } catch (_) {
-      // ignore (plugins may throw on some devices)
+      // ignore
     } finally {
       if (mounted) setState(() => _photoBusy = false);
     }
@@ -151,7 +151,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
         }
       });
     } catch (_) {
-      // Fallback to local time converted to MSK approximation.
+      // Fallback
     }
   }
 
@@ -189,9 +189,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
                     child: Row(
                       children: [
                         Tooltip(
-                          message: MaterialLocalizations.of(
-                            context,
-                          ).backButtonTooltip,
+                          message: MaterialLocalizations.of(context).backButtonTooltip,
                           child: Container(
                             width: 37,
                             height: 37,
@@ -205,12 +203,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
                                 borderRadius: BorderRadius.circular(12),
                                 onTap: () => Navigator.of(context).maybePop(),
                                 splashColor: const Color.fromARGB(157, 0, 0, 0),
-                                highlightColor: const Color.fromARGB(
-                                  157,
-                                  0,
-                                  0,
-                                  0,
-                                ),
+                                highlightColor: const Color.fromARGB(157, 0, 0, 0),
                                 child: const Center(
                                   child: Icon(
                                     Icons.arrow_back,
@@ -243,12 +236,15 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
                   icon: _selectedIcon,
                 ),
                 const SizedBox(height: 12),
+                
+                // ОБНОВЛЕННЫЙ ВИДЖЕТ ФОТО (в стиле DetailEditSheet)
                 _EventPhotoPicker(
                   path: _localImagePath,
                   onPick: _photoBusy ? null : _pickEventPhoto,
                   onRemove: _removeEventPhoto,
                   busy: _photoBusy,
                 ),
+                
                 const SizedBox(height: 10),
                 EventColorPicker(
                   selectedColor: _selectedColor,
@@ -276,8 +272,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           'Дата и время',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                 color: Colors.white70,
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
@@ -306,6 +301,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
   }
 }
 
+// ОБНОВЛЕННЫЙ ВИДЖЕТ ФОТО (в стиле DetailEditSheet)
 class _EventPhotoPicker extends StatelessWidget {
   const _EventPhotoPicker({
     required this.path,
@@ -324,93 +320,235 @@ class _EventPhotoPicker extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     final has = path != null && path!.isNotEmpty;
 
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeInOut,
       decoration: BoxDecoration(
         color: const Color(0xFF141414),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: has
+              ? const Color(0xFFFFFFFF).withValues(alpha: 0.3)
+              : Colors.white.withValues(alpha: 0.08),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Фото события',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: onPick,
-                  child: busy
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : Text(
-                          has ? 'Заменить' : 'Добавить',
-                          style: TextStyle(color: scheme.primary),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(20),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: has ? null : onPick,
+            splashColor: Colors.white.withValues(alpha: 0.05),
+            highlightColor: Colors.transparent,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: has
+                              ? const Color(0xFFFEBC2F).withValues(alpha: 0.15)
+                              : Colors.white.withValues(alpha: 0.05),
+                          borderRadius: BorderRadius.circular(12),
                         ),
-                ),
-                if (has)
-                  TextButton(
-                    onPressed: busy ? null : onRemove,
-                    child: Text(
-                      'Убрать',
-                      style: TextStyle(color: scheme.error),
-                    ),
-                  ),
-              ],
-            ),
-            if (!has)
-              Text(
-                'Необязательно. Помогает людям быстрее понять, что за событие.',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 13,
-                  height: 1.35,
-                  color: scheme.onSurfaceVariant,
-                ),
-              )
-            else ...[
-              const SizedBox(height: 10),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(minHeight: 200),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 200,
-                    child: Image.file(
-                      File(path!),
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center,
-                      errorBuilder: (_, __, ___) => Container(
-                        height: 200,
-                        color: const Color(0xFF1A1A1A),
-                        child: Center(
-                          child: Icon(
-                            Icons.broken_image_outlined,
-                            color: scheme.onSurfaceVariant,
-                          ),
+                        child: Icon(
+                          has ? Icons.photo_library : Icons.add_photo_alternate,
+                          size: 20,
+                          color: has ? const Color(0xFFFEBC2F) : Colors.white70,
                         ),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              has ? 'Фото события' : 'Добавить фото',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w700,
+                                fontSize: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                            if (!has)
+                              Text(
+                                'Необязательно',
+                                style: TextStyle(
+                                  fontFamily: 'Inter',
+                                  fontSize: 12,
+                                  color: Colors.white.withValues(alpha: 0.5),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      if (!has && !busy)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Text(
+                            'Выбрать',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      if (busy)
+                        const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        ),
+                      if (has && !busy)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            _buildIconButton(
+                              icon: Icons.delete_outline,
+                              onPressed: onRemove,
+                              color: scheme.error,
+                            ),
+                          ],
+                        ),
+                    ],
                   ),
-                ),
+                  if (has) ...[
+                    const SizedBox(height: 16),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: Stack(
+                        children: [
+                          Image.file(
+                            File(path!),
+                            width: double.infinity,
+                            height: 220,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) => Container(
+                              height: 220,
+                              color: const Color(0xFF1A1A1A),
+                              child: Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  size: 48,
+                                  color: Colors.white.withValues(alpha: 0.3),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 12,
+                            right: 12,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.7),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.edit_outlined,
+                                    size: 12,
+                                    color: Colors.white70,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Нажмите для замены',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 10,
+                                      color: Colors.white.withValues(alpha: 0.7),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  if (!has && !busy) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.03),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.05),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 16,
+                            color: Colors.white.withValues(alpha: 0.4),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Фото помогает участникам быстрее найти событие',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 12,
+                                color: Colors.white.withValues(alpha: 0.5),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildIconButton({
+    required IconData icon,
+    required VoidCallback? onPressed,
+    required Color color,
+  }) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: IconButton(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18, color: Colors.black),
+        color: color,
+        padding: EdgeInsets.zero,
+        constraints: const BoxConstraints(),
       ),
     );
   }

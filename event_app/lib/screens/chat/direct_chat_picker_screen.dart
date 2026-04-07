@@ -44,7 +44,9 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
     return null;
   }
 
-  Future<void> _loadMuteStatusesForFriends(List<Map<String, dynamic>> friends) async {
+  Future<void> _loadMuteStatusesForFriends(
+    List<Map<String, dynamic>> friends,
+  ) async {
     final ids = <String>[];
     for (final f in friends) {
       final id = f['id']?.toString();
@@ -52,9 +54,7 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
     }
     if (ids.isEmpty) return;
 
-    final results = await Future.wait<DateTime?>(
-      ids.map(_fetchMuteUntil),
-    );
+    final results = await Future.wait<DateTime?>(ids.map(_fetchMuteUntil));
     if (!mounted) return;
     final map = <String, DateTime?>{};
     for (var i = 0; i < ids.length; i++) {
@@ -145,117 +145,217 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    const bg = Color(0xFF161616);
+    final topInset = MediaQuery.of(context).padding.top;
+    // Height of header row area (excluding SafeArea top).
+    const headerHeight =
+        37.0 + 8 + 12; // button + top/bottom paddings inside header
     return Scaffold(
-      appBar: AppBar(
-        title: _UnreadTitle(totalUnread: _totalUnread),
-        actions: [
-          IconButton(
-            onPressed: _loading ? null : _load,
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Обновить',
+      backgroundColor: bg,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: RadialGradient(
+                  center: Alignment.topLeft,
+                  radius: 1.2,
+                  colors: [
+                    Colors.white.withValues(alpha: 0.05),
+                    Colors.transparent,
+                  ],
+                  stops: const [0.0, 1.0],
+                ),
+              ),
+            ),
+          ),
+          // Content goes "under" the header overlay.
+          Padding(
+            padding: EdgeInsets.only(top: topInset + headerHeight),
+            child: _buildBody(),
+          ),
+          // Header overlay (position: fixed, transparent).
+          Positioned(
+            left: 0,
+            right: 0,
+            top: 0,
+            child: SafeArea(bottom: false, child: _buildHeader()),
           ),
         ],
       ),
-      body: _loading
-          ? const Center(child: CircularProgressIndicator())
-          : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: _load,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Повторить'),
-                    ),
-                  ],
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+      child: Row(
+        children: [
+          _buildBackButton(),
+          const SizedBox(width: 12),
+          Expanded(child: _UnreadTitle(totalUnread: _totalUnread)),
+          _buildRefreshButton(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBackButton() {
+    return Tooltip(
+      message: MaterialLocalizations.of(context).backButtonTooltip,
+      child: Container(
+        width: 37,
+        height: 37,
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(157, 0, 0, 0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => Navigator.of(context).maybePop(),
+            splashColor: const Color.fromARGB(157, 0, 0, 0),
+            highlightColor: const Color.fromARGB(157, 0, 0, 0),
+            child: const Center(
+              child: Icon(Icons.arrow_back, color: Colors.white, size: 18),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRefreshButton() {
+    return Container(
+      width: 37,
+      height: 37,
+      decoration: BoxDecoration(
+        color: const Color.fromARGB(157, 0, 0, 0),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: _loading ? null : _load,
+          splashColor: const Color.fromARGB(157, 0, 0, 0),
+          highlightColor: const Color.fromARGB(157, 0, 0, 0),
+          child: const Center(
+            child: Icon(Icons.refresh, color: Colors.white, size: 18),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_loading) {
+      return const Center(
+        child: CircularProgressIndicator(color: Colors.white),
+      );
+    }
+
+    if (_error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFFFF5F57),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-            )
-          : _friends.isEmpty
-          ? Center(
-              child: Text(
-                'Нет друзей для переписки.\nДобавьте друзей в разделе «Люди».',
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 48,
+                child: FilledButton.icon(
+                  onPressed: _load,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Повторить'),
+                ),
               ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              itemCount: _friends.length,
-              separatorBuilder: (context, _) => const Divider(height: 1),
-              itemBuilder: (context, index) {
-                final f = _friends[index];
-                final email = f['email'] as String? ?? '—';
-                final id = f['id'] as String?;
-                final username = (f['username'] as String?)?.trim();
-                final displayName = (f['display_name'] as String?)?.trim();
-                final title = (displayName?.isNotEmpty == true)
-                    ? displayName!
-                    : (username?.isNotEmpty == true ? '@$username' : email);
-                final subtitle = username?.isNotEmpty == true
-                    ? '@$username'
-                    : email;
-                final avatarUrl = ApiClient.getFullImageUrl(
-                  f['avatar_url'] as String?,
-                );
-                final unread = id != null ? (_unreadByPeerId[id] ?? 0) : 0;
-                final isMuted = id != null && _isMutedNow(id);
+            ],
+          ),
+        ),
+      );
+    }
 
-                return ListTile(
-                  leading: _FriendAvatar(avatarUrl: avatarUrl),
-                  title: Row(
-                    children: [
-                      Expanded(child: Text(title)),
-                      if (isMuted) ...[
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.notifications_off_outlined,
-                          size: 16,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withValues(alpha: 0.9),
-                        ),
-                      ],
-                    ],
-                  ),
-                  subtitle: Text(subtitle),
-                  trailing: _ChatTrailing(unread: unread),
-                  onTap: id == null
-                      ? null
-                      : () {
-                          Navigator.of(context)
-                              .push<void>(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => DirectChatScreen(
-                                    userId: id,
-                                    title: title,
-                                  ),
-                                ),
-                              )
-                              .then((_) async {
-                                final u = await _fetchUnreadByPeerMap();
-                                if (mounted) {
-                                  setState(() => _unreadByPeerId = u);
-                                }
-                              });
-                        },
-                );
-              },
+    if (_friends.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text(
+            'Нет друзей для переписки.\nДобавьте друзей в разделе «Люди».',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              color: Color(0xFFB5BBC7),
+              fontSize: 14,
+              height: 1.35,
             ),
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      color: Colors.white,
+      backgroundColor: const Color(0xFF1F1F1F),
+      child: ListView.separated(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        itemCount: _friends.length,
+        separatorBuilder: (context, _) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          final f = _friends[index];
+          final email = f['email'] as String? ?? '—';
+          final id = f['id'] as String?;
+          final username = (f['username'] as String?)?.trim();
+          final displayName = (f['display_name'] as String?)?.trim();
+          final title = (displayName?.isNotEmpty == true)
+              ? displayName!
+              : (username?.isNotEmpty == true ? '@$username' : email);
+          final subtitle = username?.isNotEmpty == true ? '@$username' : email;
+          final avatarUrl = ApiClient.getFullImageUrl(
+            f['avatar_url'] as String?,
+          );
+          final unread = id != null ? (_unreadByPeerId[id] ?? 0) : 0;
+          final isMuted = id != null && _isMutedNow(id);
+
+          return _FriendChatCard(
+            title: title,
+            subtitle: subtitle,
+            avatarUrl: avatarUrl,
+            unread: unread,
+            isMuted: isMuted,
+            onTap: id == null
+                ? null
+                : () {
+                    Navigator.of(context)
+                        .push<void>(
+                          MaterialPageRoute<void>(
+                            builder: (_) =>
+                                DirectChatScreen(userId: id, title: title),
+                          ),
+                        )
+                        .then((_) async {
+                          final u = await _fetchUnreadByPeerMap();
+                          if (mounted) {
+                            setState(() => _unreadByPeerId = u);
+                          }
+                        });
+                  },
+          );
+        },
+      ),
     );
   }
 
@@ -276,19 +376,34 @@ class _UnreadTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (totalUnread <= 0) {
-      return const Text('Написать другу');
+      return const Text(
+        'Написать другу',
+        style: TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w600,
+          color: Colors.white,
+        ),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Написать другу'),
+        const Text(
+          'Написать другу',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
         Text(
           'Непрочитанных: $totalUnread',
           style: TextStyle(
+            fontFamily: 'Inter',
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: Theme.of(context).colorScheme.error,
+            color: const Color(0xFFFF5F57),
           ),
         ),
       ],
@@ -296,36 +411,112 @@ class _UnreadTitle extends StatelessWidget {
   }
 }
 
-class _ChatTrailing extends StatelessWidget {
-  const _ChatTrailing({required this.unread});
+class _FriendChatCard extends StatelessWidget {
+  const _FriendChatCard({
+    required this.title,
+    required this.subtitle,
+    required this.avatarUrl,
+    required this.unread,
+    required this.isMuted,
+    required this.onTap,
+  });
 
+  final String title;
+  final String subtitle;
+  final String? avatarUrl;
   final int unread;
+  final bool isMuted;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    final icon = Icon(
-      Icons.chat_bubble_outline,
-      color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final trailing = _ChatTrailing(unread: unread);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF141414),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+          ),
+          child: Row(
+            children: [
+              _FriendAvatar(avatarUrl: avatarUrl, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        if (isMuted) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.notifications_off_outlined,
+                            size: 16,
+                            color: Colors.white.withValues(alpha: 0.65),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        color: Color(0xFFB5BBC7),
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              trailing,
+            ],
+          ),
+        ),
+      ),
     );
-    if (unread <= 0) return icon;
-    return Badge(label: Text(unread > 99 ? '99+' : '$unread'), child: icon);
   }
 }
 
 class _FriendAvatar extends StatelessWidget {
-  const _FriendAvatar({required this.avatarUrl});
+  const _FriendAvatar({required this.avatarUrl, this.size = 40});
 
   final String? avatarUrl;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    const size = 40.0;
+    final r = BorderRadius.circular(10);
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return CircleAvatar(
-        radius: size / 2,
-        backgroundColor: scheme.surfaceContainerHighest,
-        child: ClipOval(
+      return ClipRRect(
+        borderRadius: r,
+        child: Container(
+          width: size,
+          height: size,
+          color: scheme.surfaceContainerHighest,
           child: CachedNetworkImage(
             imageUrl: avatarUrl!,
             width: size,
@@ -345,16 +536,58 @@ class _FriendAvatar extends StatelessWidget {
                 ),
               ),
             ),
-            errorWidget: (context, url, error) =>
-                Icon(Icons.person, color: scheme.onSurfaceVariant),
+            errorWidget: (context, url, error) => Center(
+              child: Icon(Icons.person, color: scheme.onSurfaceVariant),
+            ),
           ),
         ),
       );
     }
-    return CircleAvatar(
-      radius: size / 2,
-      backgroundColor: scheme.surfaceContainerHighest,
-      child: Icon(Icons.person, color: scheme.onSurfaceVariant),
+    return ClipRRect(
+      borderRadius: r,
+      child: Container(
+        width: size,
+        height: size,
+        color: scheme.surfaceContainerHighest,
+        child: Center(
+          child: Icon(Icons.person, color: scheme.onSurfaceVariant),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatTrailing extends StatelessWidget {
+  const _ChatTrailing({required this.unread});
+
+  final int unread;
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      alignment: Alignment.center,
+      child: const Icon(
+        Icons.chat_bubble_outline,
+        color: Colors.black,
+        size: 20,
+      ),
+    );
+    if (unread <= 0) return icon;
+    return Badge(
+      label: Text(
+        unread > 99 ? '99+' : '$unread',
+        style: const TextStyle(
+          fontFamily: 'Inter',
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      child: icon,
     );
   }
 }
