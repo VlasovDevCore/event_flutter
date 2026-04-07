@@ -72,6 +72,32 @@ try {
   // ignore
 }
 
+function resolveUploadsFilePathFromUrl(imageUrl: string): string | null {
+  const u = imageUrl.trim();
+  if (!u.startsWith('/uploads/')) return null;
+  // avoid path traversal: resolve and ensure within uploadsDir
+  const rel = u.replace('/uploads/', '');
+  const abs = path.resolve(uploadsDir, rel);
+  const uploadsAbs = path.resolve(uploadsDir);
+  if (!abs.startsWith(uploadsAbs)) return null;
+  return abs;
+}
+
+async function tryDeleteOldAvatar(client: PoolClient, userId: string): Promise<void> {
+  const r = await client.query(`SELECT avatar_url FROM users WHERE id = $1`, [userId]);
+  const old = (r.rows[0]?.avatar_url as string | null | undefined) ?? null;
+  if (!old) return;
+  // delete only our uploaded avatars
+  if (!old.startsWith('/uploads/avatars/')) return;
+  const abs = resolveUploadsFilePathFromUrl(old);
+  if (!abs) return;
+  try {
+    await fs.promises.unlink(abs);
+  } catch {
+    // ignore (already deleted or inaccessible)
+  }
+}
+
 function todayFolderName() {
   // YYYY-MM-DD (UTC), чтобы имя папки было консистентным
   return new Date().toISOString().slice(0, 10);
@@ -188,6 +214,7 @@ router.post(
     const relativeUrl = `/uploads/${relToUploadsUrl}/${req.file.filename}`;
     const client = await pool.connect();
     try {
+      await tryDeleteOldAvatar(client, userId);
       const result = await client.query(
         `UPDATE users SET avatar_url = $1 WHERE id = $2
          RETURNING id, email, status, username, display_name, bio, birth_date, gender, avatar_url, cover_gradient_colors, created_at`,

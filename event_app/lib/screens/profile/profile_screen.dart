@@ -459,7 +459,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             profile.allowMessagesFromNonFriends) &&
                         !blockStatus.isBlocked &&
                         !blockStatus.isBlockedBy,
-                    isUserBlocked: blockStatus.isBlocked,
+                    isUserBlocked: blockStatus.isBlocked || blockStatus.isBlockedBy,
                     onFollowingChanged: () {
                       unawaited(_reloadRelationshipData());
                     },

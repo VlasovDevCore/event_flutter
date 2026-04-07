@@ -153,6 +153,26 @@ class DirectChatBloc extends ChangeNotifier {
     }
   }
 
+  void clearConversationLocal() {
+    messages = [];
+    loading = false;
+    error = null;
+    showScrollToBottom = false;
+    pendingNewMessagesCount = 0;
+    _bufferedNewMessages.clear();
+    lastMarkedViewUpToId = null;
+    editingMessageId = null;
+    replyingToMessage = null;
+    emojiPickerVisible = false;
+    sendingStatus.clear();
+    sentStatus.clear();
+    tempIds.clear();
+    jumpHighlightedMessageId = null;
+    messageActionsMenuOpenForId = null;
+    _pruneMessageKeys();
+    notifyListeners();
+  }
+
   void _scrollToEnd() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!scrollController.hasClients) return;

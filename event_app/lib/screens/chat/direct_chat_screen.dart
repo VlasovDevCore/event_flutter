@@ -6,6 +6,8 @@ import '../../models/event_message.dart';
 import '../../services/api_client.dart';
 import '../../services/chat_presence_tracker.dart';
 import '../profile/profile_avatar.dart';
+import '../profile/profile_screen.dart';
+import '../profile/profile_repository.dart';
 import 'bloc/direct_chat_bloc.dart';
 import 'chat_appearance.dart';
 import 'widgets/direct_chat_app_bar.dart';
@@ -33,6 +35,8 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   String? _peerHeaderName;
   String? _peerAvatarResolved;
   String? _peerUsername;
+  DateTime? _mutedUntil;
+  bool _isBlocked = false;
 
   String get _titleForAppBar {
     final n = _peerHeaderName?.trim();
@@ -59,13 +63,200 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     _bloc.onShowError = _showToast;
     unawaited(_bloc.init());
     _loadPeerProfile();
+    _loadMuteStatus();
+    _loadBlockStatus();
+  }
+
+  bool get _isMutedNow {
+    final u = _mutedUntil;
+    if (u == null) return false;
+    return u.isAfter(DateTime.now());
+  }
+
+  Future<void> _loadMuteStatus() async {
+    try {
+      final data = await ApiClient.instance.get(
+        '/messages/with/${widget.userId}/mute',
+        withAuth: true,
+      );
+      final raw = data['muted_until'];
+      DateTime? parsed;
+      if (raw is String && raw.trim().isNotEmpty) {
+        parsed = DateTime.tryParse(raw)?.toLocal();
+      }
+      if (!mounted) return;
+      setState(() => _mutedUntil = parsed);
+    } catch (_) {}
+  }
+
+  Future<void> _loadBlockStatus() async {
+    try {
+      final status = await ProfileRepository.fetchBlockStatus(widget.userId);
+      if (!mounted) return;
+      setState(() => _isBlocked = status.isBlocked);
+    } catch (_) {}
+  }
+
+  Future<void> _setMuteFor(Duration duration) async {
+    final untilUtc = DateTime.now().add(duration).toUtc();
+    try {
+      final data = await ApiClient.instance.post(
+        '/messages/with/${widget.userId}/mute',
+        body: {'muted_until': untilUtc.toIso8601String()},
+        withAuth: true,
+      );
+      final raw = data['muted_until'];
+      final parsed = raw is String ? DateTime.tryParse(raw)?.toLocal() : null;
+      if (!mounted) return;
+      setState(() => _mutedUntil = parsed);
+      _showToast('Уведомления отключены');
+    } on ApiException catch (e) {
+      _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
+    } catch (_) {
+      _showToast('Не удалось изменить уведомления');
+    }
+  }
+
+  Future<void> _unmute() async {
+    try {
+      await ApiClient.instance.post(
+        '/messages/with/${widget.userId}/mute',
+        body: {'muted_until': null},
+        withAuth: true,
+      );
+      if (!mounted) return;
+      setState(() => _mutedUntil = null);
+      _showToast('Уведомления включены');
+    } on ApiException catch (e) {
+      _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
+    } catch (_) {
+      _showToast('Не удалось изменить уведомления');
+    }
+  }
+
+  Future<void> _confirmAndDeleteChat() async {
+    final scheme = Theme.of(context).colorScheme;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: scheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Удалить чат?',
+          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+        ),
+        content: const Text(
+          'Будет удалена история переписки. Действие нельзя отменить.',
+          style: TextStyle(fontFamily: 'Inter', height: 1.35),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Отмена', style: TextStyle(color: scheme.primary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              'Удалить',
+              style: TextStyle(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await ApiClient.instance.delete(
+        '/messages/with/${widget.userId}',
+        withAuth: true,
+      );
+      if (!mounted) return;
+      _showToast('Чат удалён');
+      _bloc.clearConversationLocal();
+    } on ApiException catch (e) {
+      _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
+    } catch (_) {
+      _showToast('Не удалось удалить чат');
+    }
+  }
+
+  Future<void> _confirmAndToggleBlockUser() async {
+    final scheme = Theme.of(context).colorScheme;
+    final willBlock = !_isBlocked;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: scheme.surfaceContainerHigh,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text(
+          willBlock ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?',
+          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+        ),
+        content: Text(
+          willBlock
+              ? 'Вы больше не сможете переписываться и видеть сообщения друг друга.'
+              : 'Пользователь снова сможет писать вам и видеть переписку.',
+          style: TextStyle(fontFamily: 'Inter', height: 1.35),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text('Отмена', style: TextStyle(color: scheme.primary)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(
+              willBlock ? 'Заблокировать' : 'Разблокировать',
+              style: TextStyle(
+                color: scheme.error,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      if (willBlock) {
+        await ApiClient.instance.post(
+          '/blocks/block',
+          body: {'userId': widget.userId},
+          withAuth: true,
+        );
+      } else {
+        await ApiClient.instance.post(
+          '/blocks/unblock',
+          body: {'userId': widget.userId},
+          withAuth: true,
+        );
+      }
+      if (!mounted) return;
+      setState(() => _isBlocked = willBlock);
+      _showToast(willBlock ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
+      if (willBlock) {
+        Navigator.of(context).maybePop();
+      }
+    } on ApiException catch (e) {
+      _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
+    } catch (_) {
+      _showToast(willBlock
+          ? 'Не удалось заблокировать пользователя'
+          : 'Не удалось разблокировать пользователя');
+    }
   }
 
   Future<void> _loadPeerProfile() async {
     try {
       final data = await ApiClient.instance.get('/users/${widget.userId}');
-      final displayName =
-          (data['display_name'] ?? data['displayName'])?.toString().trim();
+      final displayName = (data['display_name'] ?? data['displayName'])
+          ?.toString()
+          .trim();
       final email = data['email']?.toString().trim();
       final username = data['username']?.toString().trim();
       final rawAvatar = (data['avatar_url'] ?? data['avatarUrl'])?.toString();
@@ -137,10 +328,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         content: Text(
           message,
-          style: TextStyle(
-            fontFamily: 'Inter',
-            color: scheme.onSurface,
-          ),
+          style: TextStyle(fontFamily: 'Inter', color: scheme.onSurface),
         ),
       ),
     );
@@ -155,66 +343,85 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final chat = EventChatTheme.of(context);
-    final subtitle = (_peerUsername != null && _peerUsername!.isNotEmpty)
-        ? '@${_peerUsername!}'
-        : null;
+    return ListenableBuilder(
+      listenable: _bloc,
+      builder: (context, _) {
+        final chat = EventChatTheme.of(context);
+        final subtitle = (_peerUsername != null && _peerUsername!.isNotEmpty)
+            ? '@${_peerUsername!}'
+            : null;
 
-    return Scaffold(
-      backgroundColor: chat.scaffold,
-      extendBodyBehindAppBar: true,
-      appBar: DirectChatAppBar(
-        peerUserId: widget.userId,
-        title: _titleForAppBar,
-        subtitle: subtitle,
-        avatarUrl: _peerAvatarResolved,
-        titleLetter: _initialLetter(_titleForAppBar),
-      ),
-      body: GestureDetector(
-        behavior: HitTestBehavior.translucent,
-        onTap: () {
-          _bloc.inputFocusNode.unfocus();
-          FocusManager.instance.primaryFocus?.unfocus();
-        },
-        child: Stack(
-          alignment: Alignment.bottomCenter,
-          children: [
-            Positioned.fill(child: DirectChatBody(bloc: _bloc)),
-            Positioned(
-              left: 0,
-              right: 0,
-              top: 0,
-              height: EventChatTheme.appBarTopShadowExtent,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: chat.appBarTopShadowGradient,
+        return Scaffold(
+          backgroundColor: chat.scaffold,
+          extendBodyBehindAppBar: true,
+          appBar: DirectChatAppBar(
+            peerUserId: widget.userId,
+            title: _titleForAppBar,
+            subtitle: subtitle,
+            avatarUrl: _peerAvatarResolved,
+            titleLetter: _initialLetter(_titleForAppBar),
+            isMuted: _isMutedNow,
+            isBlocked: _isBlocked,
+            canClearChat: _bloc.messages.isNotEmpty,
+            onMuteFor: _setMuteFor,
+            onUnmute: _unmute,
+            onOpenProfile: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => ProfileScreen(userId: widget.userId),
+                ),
+              );
+            },
+            onDeleteChat: _confirmAndDeleteChat,
+            onToggleBlockUser: _confirmAndToggleBlockUser,
+          ),
+          body: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              _bloc.inputFocusNode.unfocus();
+              FocusManager.instance.primaryFocus?.unfocus();
+            },
+            child: Stack(
+              alignment: Alignment.bottomCenter,
+              children: [
+                Positioned.fill(child: DirectChatBody(bloc: _bloc)),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  height: EventChatTheme.appBarTopShadowExtent,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: chat.appBarTopShadowGradient,
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              height: EventChatTheme.inputBottomShadowExtent,
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: chat.inputBottomShadowGradient,
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  height: EventChatTheme.inputBottomShadowExtent,
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: chat.inputBottomShadowGradient,
+                      ),
+                    ),
                   ),
                 ),
-              ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: DirectChatInput(bloc: _bloc),
+                ),
+              ],
             ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: DirectChatInput(bloc: _bloc),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

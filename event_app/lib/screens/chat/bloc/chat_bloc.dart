@@ -575,13 +575,18 @@ class ChatBloc extends ChangeNotifier {
     if (wasAtBottom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (scrollController.hasClients) {
-          // Плавно прокручиваем вниз
-          scrollController.animateTo(
-            0,
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-          );
-          _scheduleMarkViewed();
+          // Плавно прокручиваем вниз и отмечаем просмотр после завершения,
+          // иначе isScrolledToBottom() может быть false во время анимации.
+          unawaited(() async {
+            try {
+              await scrollController.animateTo(
+                0,
+                duration: const Duration(milliseconds: 200),
+                curve: Curves.easeOut,
+              );
+            } catch (_) {}
+            markMessagesViewedIfNeeded();
+          }());
         }
       });
     }

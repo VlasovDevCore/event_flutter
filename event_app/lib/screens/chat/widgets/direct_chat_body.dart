@@ -5,6 +5,7 @@ import '../chat_appearance.dart';
 import 'chat_app_bar.dart';
 import 'direct_chat_message_list.dart';
 import 'direct_scroll_to_bottom_button.dart';
+import 'direct_chat_input.dart';
 
 class DirectChatBody extends StatelessWidget {
   const DirectChatBody({super.key, required this.bloc});
@@ -62,6 +63,7 @@ class DirectChatBody extends StatelessWidget {
           child: Stack(
             children: [
               DirectChatMessageList(bloc: bloc),
+              if (bloc.messages.isEmpty) _EmptyDirectChatHint(bloc: bloc),
               DirectScrollToBottomButton(bloc: bloc),
             ],
           ),
@@ -104,6 +106,39 @@ class DirectChatBody extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyDirectChatHint extends StatelessWidget {
+  const _EmptyDirectChatHint({required this.bloc});
+
+  final DirectChatBloc bloc;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final topInset = ChatAppBar.listTopPadding(context);
+    final bottomInset = DirectChatInput.overlayReserveHeight(context, bloc) + 12;
+
+    return IgnorePointer(
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, topInset + 24, 24, bottomInset),
+          child: Center(
+            child: Text(
+              'Здесь пока нет сообщений.\nНапишите первым.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 14,
+                height: 1.35,
+                color: scheme.onSurfaceVariant,
+              ),
+            ),
           ),
         ),
       ),

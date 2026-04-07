@@ -1,10 +1,22 @@
 import { Router } from 'express';
 import type { PoolClient } from 'pg';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { notifyEventChatMessage } from '../services/push';
+import { decryptMessageText, encryptMessageText } from '../utils/messageCrypto';
 
 const router = Router();
+
+type RoomsMetaMap = Record<
+  string,
+  {
+    unread_count: number;
+    muted_until: string | null;
+  }
+>;
 
 /** Те же going_users / not_going_users, что у GET /events/:id — для списков «мои комнаты» / «создал». */
 async function attachRsvpListsToEventRows(
@@ -68,6 +80,77 @@ interface NewsItem {
   is_viewed: boolean;
 }
 
+const uploadsDir = path.join(process.cwd(), 'uploads');
+const eventImagesBaseDir = path.join(uploadsDir, 'events');
+try {
+  fs.mkdirSync(eventImagesBaseDir, { recursive: true });
+} catch {
+  // ignore
+}
+
+function todayFolderName() {
+  // YYYY-MM-DD (UTC), чтобы имя папки было консистентным
+  return new Date().toISOString().slice(0, 10);
+}
+
+const uploadEventImage = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      const dayDir = path.join(eventImagesBaseDir, todayFolderName());
+      try {
+        fs.mkdirSync(dayDir, { recursive: true });
+      } catch {
+        // ignore
+      }
+      cb(null, dayDir);
+    },
+    filename: (req, file, cb) => {
+      const eventId = (req.params as any).id ?? 'event';
+      const ext = path.extname(file.originalname || '') || '.jpg';
+      const safeExt = ext.length <= 8 ? ext : '.jpg';
+      cb(null, `${eventId}-${Date.now()}${safeExt}`);
+    },
+  }),
+  limits: {
+    fileSize: 8 * 1024 * 1024, // 8MB
+  },
+  fileFilter: (_req, file, cb) => {
+    const mimetype = file.mimetype ?? '';
+    const ext = path.extname(file.originalname || '').toLowerCase();
+    const okByMime = mimetype.startsWith('image/');
+    const okByExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp'].includes(ext);
+    if (!okByMime && !okByExt) {
+      return cb(new Error('Only image uploads are allowed'));
+    }
+    cb(null, true);
+  },
+});
+
+function resolveUploadsFilePathFromUrl(imageUrl: string): string | null {
+  const u = imageUrl.trim();
+  if (!u.startsWith('/uploads/')) return null;
+  // avoid path traversal: resolve and ensure within uploadsDir
+  const rel = u.replace('/uploads/', '');
+  const abs = path.resolve(uploadsDir, rel);
+  const uploadsAbs = path.resolve(uploadsDir);
+  if (!abs.startsWith(uploadsAbs)) return null;
+  return abs;
+}
+
+async function tryDeleteOldEventImage(client: PoolClient, eventId: string): Promise<void> {
+  const r = await client.query(`SELECT image_url FROM events WHERE id = $1`, [eventId]);
+  const old = (r.rows[0]?.image_url as string | null | undefined) ?? null;
+  if (!old) return;
+  // only delete our uploads files
+  const abs = resolveUploadsFilePathFromUrl(old);
+  if (!abs) return;
+  try {
+    await fs.promises.unlink(abs);
+  } catch {
+    // ignore (already deleted or inaccessible)
+  }
+}
+
 // Получить список новостей с отметкой о просмотре
 router.get('/news', authMiddleware, async (req: AuthRequest, res) => {
   const client = await pool.connect();
@@ -110,6 +193,115 @@ router.get('/news', authMiddleware, async (req: AuthRequest, res) => {
     
     return res.json(newsMap);
   } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Есть ли непрочитанные новости (для индикатора "точка" в UI).
+router.get('/news/unread-flag', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      SELECT 1
+      FROM news n
+      WHERE n.is_published = true
+        AND NOT EXISTS (
+          SELECT 1 FROM viewed_news v
+          WHERE v.news_id = n.id AND v.user_id = $1
+        )
+      LIMIT 1
+      `,
+      [userId],
+    );
+    return res.json({ has_unread: (r.rowCount ?? 0) > 0 });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Загрузить фотографию события (multipart/form-data, field name: image).
+// Только создатель события.
+router.post(
+  '/:id/image',
+  authMiddleware,
+  uploadEventImage.single('image'),
+  async (req: AuthRequest, res) => {
+    const eventId = String(req.params.id);
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+    if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+    if (!req.file) return res.status(400).json({ error: 'image is required' });
+
+    const client = await pool.connect();
+    try {
+      const ownership = await client.query(
+        `SELECT created_by FROM events WHERE id = $1`,
+        [eventId],
+      );
+      if (ownership.rowCount === 0) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      const ownerId = (ownership.rows[0] as { created_by: string | null }).created_by;
+      if (!ownerId || ownerId !== userId) {
+        return res.status(403).json({ error: 'Только создатель может менять фото события' });
+      }
+
+      await tryDeleteOldEventImage(client, eventId);
+
+      // req.file.destination — реальный путь на диске; конвертим в URL-формат.
+      const fileDestination = (req.file as any).destination as string | undefined;
+      const relToUploads =
+        fileDestination != null ? path.relative(uploadsDir, fileDestination) : null;
+      const relToUploadsUrl =
+        relToUploads != null ? relToUploads.split(path.sep).join('/') : 'events';
+      const relativeUrl = `/uploads/${relToUploadsUrl}/${req.file.filename}`;
+
+      await client.query(`UPDATE events SET image_url = $1 WHERE id = $2`, [
+        relativeUrl,
+        eventId,
+      ]);
+      return res.json({ success: true, image_url: relativeUrl });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(err);
+      return res.status(500).json({ error: 'Internal error' });
+    } finally {
+      client.release();
+    }
+  },
+);
+
+// Удалить фотографию события (и файл), только создатель события.
+router.delete('/:id/image', authMiddleware, async (req: AuthRequest, res) => {
+  const eventId = String(req.params.id);
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+
+  const client = await pool.connect();
+  try {
+    const ownership = await client.query(`SELECT created_by FROM events WHERE id = $1`, [eventId]);
+    if (ownership.rowCount === 0) return res.status(404).json({ error: 'Event not found' });
+    const ownerId = (ownership.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== userId) {
+      return res.status(403).json({ error: 'Только создатель может менять фото события' });
+    }
+
+    await tryDeleteOldEventImage(client, eventId);
+    await client.query(`UPDATE events SET image_url = NULL WHERE id = $1`, [eventId]);
+    return res.json({ success: true, image_url: null });
+  } catch (err) {
+    // eslint-disable-next-line no-console
     console.error(err);
     return res.status(500).json({ error: 'Internal error' });
   } finally {
@@ -220,7 +412,7 @@ router.get('/', async (req, res) => {
       const [minLon, minLat, maxLon, maxLat] = bbox;
       const result = await client.query(
         `
-        SELECT e.id, e.title, e.description, e.lat, e.lon,
+        SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
                e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
                e.created_by AS created_by_user_id,
                u.email AS created_by_email,
@@ -240,7 +432,7 @@ router.get('/', async (req, res) => {
 
     const result = await client.query(
       `
-      SELECT e.id, e.title, e.description, e.lat, e.lon,
+      SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
              e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
              e.created_by AS created_by_user_id,
              u.email AS created_by_email,
@@ -273,7 +465,7 @@ router.get('/my/rooms', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await client.query(
       `
-      SELECT e.id, e.title, e.description, e.lat, e.lon,
+      SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
              e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
              e.created_by AS created_by_user_id,
              u.email AS created_by_email,
@@ -298,6 +490,110 @@ router.get('/my/rooms', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+// Общее количество непрочитанных сообщений в чатах событий (по моим комнатам RSVP=1).
+router.get('/unread-count', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM event_messages m
+      JOIN event_rsvp rsvp
+        ON rsvp.event_id = m.event_id
+       AND rsvp.user_id = $1
+       AND rsvp.status = 1
+      WHERE m.user_id <> $1
+        AND NOT EXISTS (
+          SELECT 1 FROM event_message_views v
+          WHERE v.message_id = m.id AND v.user_id = $1
+        )
+      `,
+      [userId],
+    );
+    const count = (r.rows[0]?.count as number) ?? 0;
+    return res.json({ count });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Мета по комнатам (unread + mute) для списка «мои комнаты».
+// Body: { eventIds: string[] }
+router.post('/rooms-meta', authMiddleware, async (req: AuthRequest, res) => {
+  const userId = req.user?.id;
+  const { eventIds } = (req.body ?? {}) as { eventIds?: unknown };
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!Array.isArray(eventIds)) {
+    return res.status(400).json({ error: 'eventIds обязателен (array)' });
+  }
+  const ids = eventIds
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter((x) => x !== '');
+  if (ids.length === 0) return res.json({ byEvent: {} satisfies RoomsMetaMap });
+
+  const client = await pool.connect();
+  try {
+    // unread_count: чужие сообщения без отметки просмотра текущим пользователем
+    const unreadR = await client.query(
+      `
+      SELECT m.event_id, COUNT(*)::int AS cnt
+      FROM event_messages m
+      WHERE m.event_id = ANY($1::uuid[])
+        AND m.user_id <> $2
+        AND NOT EXISTS (
+          SELECT 1 FROM event_message_views v
+          WHERE v.message_id = m.id AND v.user_id = $2
+        )
+      GROUP BY m.event_id
+      `,
+      [ids, userId],
+    );
+
+    const muteR = await client.query(
+      `
+      SELECT event_id, muted_until
+      FROM user_event_chat_mutes
+      WHERE user_id = $1 AND event_id = ANY($2::uuid[])
+      `,
+      [userId, ids],
+    );
+
+    const byEvent: RoomsMetaMap = {};
+    for (const id of ids) {
+      byEvent[id] = { unread_count: 0, muted_until: null };
+    }
+
+    for (const row of unreadR.rows) {
+      const eid = row.event_id as string;
+      const cnt = row.cnt as number;
+      if (!byEvent[eid]) byEvent[eid] = { unread_count: 0, muted_until: null };
+      byEvent[eid].unread_count = cnt;
+    }
+
+    for (const row of muteR.rows) {
+      const eid = row.event_id as string;
+      const until = (row.muted_until as Date | null) ?? null;
+      if (!byEvent[eid]) byEvent[eid] = { unread_count: 0, muted_until: null };
+      byEvent[eid].muted_until = until ? until.toISOString() : null;
+    }
+
+    return res.json({ byEvent });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 // События, которые создал текущий пользователь (включая завершённые)
 router.get('/my/created', authMiddleware, async (req: AuthRequest, res) => {
   const userId = req.user?.id;
@@ -308,7 +604,7 @@ router.get('/my/created', authMiddleware, async (req: AuthRequest, res) => {
   try {
     const result = await client.query(
       `
-      SELECT e.id, e.title, e.description, e.lat, e.lon,
+      SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
              e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
              e.created_by AS created_by_user_id,
              u.email AS created_by_email,
@@ -340,7 +636,7 @@ router.get('/:id', async (req, res) => {
   try {
     const result = await client.query(
       `
-      SELECT e.id, e.title, e.description, e.lat, e.lon,
+      SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
              e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
              e.created_by AS created_by_user_id,
              u.email AS created_by_email,
@@ -434,7 +730,7 @@ router.put('/:id', authMiddleware, async (req: AuthRequest, res) => {
           marker_color_value = COALESCE($4, marker_color_value),
           marker_icon_code = COALESCE($5, marker_icon_code)
       WHERE id = $1
-      RETURNING id, title, description, lat, lon,
+      RETURNING id, title, description, image_url, lat, lon,
                 marker_color_value, marker_icon_code, created_at, ends_at,
                 created_by AS created_by_user_id
       `,
@@ -623,9 +919,11 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
       LEFT JOIN event_messages reply_msg ON reply_msg.id = ins.reply_to_id
       LEFT JOIN users ru ON ru.id = reply_msg.user_id
       `,
-      [eventId, userId, text.trim(), replyToId],
+      [eventId, userId, encryptMessageText(text.trim()), replyToId],
     );
     const row = result.rows[0] as Record<string, unknown>;
+    (row as any).text = decryptMessageText((row as any).text);
+    (row as any).reply_to_text = decryptMessageText((row as any).reply_to_text);
     (row as Record<string, unknown>).is_viewed = false;
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
@@ -695,11 +993,11 @@ router.post('/:id/messages/view', authMiddleware, async (req: AuthRequest, res) 
       FROM event_messages m
       WHERE m.event_id = $1
         AND m.user_id <> $2
-        AND m.created_at <= $3
+        AND (m.created_at <= $3 OR m.id = $4)
       ON CONFLICT (message_id, user_id)
       DO UPDATE SET viewed_at = EXCLUDED.viewed_at
       `,
-      [eventId, userId, upToCreatedAt],
+      [eventId, userId, upToCreatedAt, upToId],
     );
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
@@ -710,6 +1008,78 @@ router.post('/:id/messages/view', authMiddleware, async (req: AuthRequest, res) 
     }
 
     return res.json({ success: true });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Текущий mute push-уведомлений для чата события
+router.get('/:id/mute', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId } = req.params;
+  const userId = req.user?.id;
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      SELECT muted_until
+      FROM user_event_chat_mutes
+      WHERE user_id = $1 AND event_id = $2
+      `,
+      [userId, eventId],
+    );
+    const mutedUntil = (r.rows[0]?.muted_until as Date | null | undefined) ?? null;
+    return res.json({ muted_until: mutedUntil ? mutedUntil.toISOString() : null });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Установить/сбросить mute push-уведомлений для чата события
+router.post('/:id/mute', authMiddleware, async (req: AuthRequest, res) => {
+  const { id: eventId } = req.params;
+  const userId = req.user?.id;
+  const { muted_until } = (req.body ?? {}) as { muted_until?: string | null };
+  if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+
+  let parsed: Date | null = null;
+  if (muted_until === null) {
+    parsed = null;
+  } else if (muted_until === undefined) {
+    return res.status(400).json({ error: 'muted_until обязателен (ISO строка или null)' });
+  } else if (typeof muted_until !== 'string' || muted_until.trim() === '') {
+    return res.status(400).json({ error: 'muted_until: некорректное значение' });
+  } else {
+    const d = new Date(muted_until);
+    if (Number.isNaN(d.getTime())) {
+      return res.status(400).json({ error: 'muted_until: некорректный ISO формат' });
+    }
+    parsed = d;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `
+      INSERT INTO user_event_chat_mutes (user_id, event_id, muted_until, updated_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (user_id, event_id)
+      DO UPDATE SET muted_until = EXCLUDED.muted_until, updated_at = now()
+      `,
+      [userId, eventId, parsed],
+    );
+    return res.json({ success: true, muted_until: parsed ? parsed.toISOString() : null });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -777,7 +1147,12 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
       `,
       [eventId, userId],
     );
-    return res.json(result.rows);
+    const rows = result.rows.map((r) => ({
+      ...r,
+      text: decryptMessageText((r as any).text),
+      reply_to_text: decryptMessageText((r as any).reply_to_text),
+    }));
+    return res.json(rows);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -831,12 +1206,14 @@ router.put('/:id/messages/:messageId', authMiddleware, async (req: AuthRequest, 
       LEFT JOIN event_messages reply_msg ON reply_msg.id = updated.reply_to_id
       LEFT JOIN users ru ON ru.id = reply_msg.user_id
       `,
-      [text.trim(), messageId, eventId, userId],
+      [encryptMessageText(text.trim()), messageId, eventId, userId],
     );
     if (upd.rowCount === 0) {
       return res.status(404).json({ error: 'Сообщение не найдено или не ваше' });
     }
     const row = upd.rows[0] as Record<string, unknown>;
+    (row as any).text = decryptMessageText((row as any).text);
+    (row as any).reply_to_text = decryptMessageText((row as any).reply_to_text);
 
     const socketIo = (req as unknown as { app: { get: (key: string) => unknown } }).app.get('io');
     if (socketIo && typeof (socketIo as { to: (room: string) => { emit: (ev: string, data: unknown) => void } }).to === 'function') {

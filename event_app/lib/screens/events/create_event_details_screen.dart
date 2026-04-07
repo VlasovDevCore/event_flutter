@@ -1,10 +1,12 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../../config/event_marker_catalog.dart';
 import '../../../models/event.dart';
@@ -35,6 +37,8 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
   late int _userStatus;
   late DateTime _baseNow;
   bool _dateTimeEditedByUser = false;
+  String? _localImagePath;
+  bool _photoBusy = false;
 
   final _colors = EventMarkerCatalog.availableColors;
   late List<IconData> _icons;
@@ -79,6 +83,7 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
       id: uuid.v4(),
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
+      localImagePath: _localImagePath,
       lat: widget.position.latitude,
       lon: widget.position.longitude,
       createdAt: _baseNow,
@@ -93,6 +98,30 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
     );
 
     Navigator.of(context).pop(event);
+  }
+
+  Future<void> _pickEventPhoto() async {
+    if (_photoBusy) return;
+    setState(() => _photoBusy = true);
+    try {
+      final picker = ImagePicker();
+      final x = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 92,
+        maxWidth: 2000,
+      );
+      if (x == null) return;
+      if (!mounted) return;
+      setState(() => _localImagePath = x.path);
+    } catch (_) {
+      // ignore (plugins may throw on some devices)
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  void _removeEventPhoto() {
+    setState(() => _localImagePath = null);
   }
 
   DateTime get _firstAllowedDay =>
@@ -213,6 +242,13 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
                   color: _selectedColor,
                   icon: _selectedIcon,
                 ),
+                const SizedBox(height: 12),
+                _EventPhotoPicker(
+                  path: _localImagePath,
+                  onPick: _photoBusy ? null : _pickEventPhoto,
+                  onRemove: _removeEventPhoto,
+                  busy: _photoBusy,
+                ),
                 const SizedBox(height: 10),
                 EventColorPicker(
                   selectedColor: _selectedColor,
@@ -265,6 +301,116 @@ class _CreateEventDetailsScreenState extends State<CreateEventDetailsScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EventPhotoPicker extends StatelessWidget {
+  const _EventPhotoPicker({
+    required this.path,
+    required this.onPick,
+    required this.onRemove,
+    required this.busy,
+  });
+
+  final String? path;
+  final VoidCallback? onPick;
+  final VoidCallback onRemove;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final has = path != null && path!.isNotEmpty;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF141414),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Expanded(
+                  child: Text(
+                    'Фото события',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                      color: Colors.white70,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: onPick,
+                  child: busy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Text(
+                          has ? 'Заменить' : 'Добавить',
+                          style: TextStyle(color: scheme.primary),
+                        ),
+                ),
+                if (has)
+                  TextButton(
+                    onPressed: busy ? null : onRemove,
+                    child: Text(
+                      'Убрать',
+                      style: TextStyle(color: scheme.error),
+                    ),
+                  ),
+              ],
+            ),
+            if (!has)
+              Text(
+                'Необязательно. Помогает людям быстрее понять, что за событие.',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 13,
+                  height: 1.35,
+                  color: scheme.onSurfaceVariant,
+                ),
+              )
+            else ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(minHeight: 200),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 200,
+                    child: Image.file(
+                      File(path!),
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 200,
+                        color: const Color(0xFF1A1A1A),
+                        child: Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: scheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

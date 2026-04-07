@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
 
 import '../../config/event_marker_catalog.dart';
 import '../../models/event.dart';
@@ -122,6 +123,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         return DetailEditSheet(
           initialTitle: event.title,
           initialDescription: event.description,
+          initialImageUrl: event.imageUrl,
           initialColor: selectedColor,
           initialIcon: selectedIcon,
           onSave: (payload) => Navigator.of(context).pop(payload),
@@ -149,13 +151,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         },
       );
 
-      final updated = data.isNotEmpty
+      Event updated = data.isNotEmpty
           ? (() {
               final parsed = Event.fromApiMap(data);
               return Event(
                 id: parsed.id,
                 title: parsed.title,
                 description: parsed.description,
+                imageUrl: parsed.imageUrl ?? base.imageUrl,
                 lat: parsed.lat,
                 lon: parsed.lon,
                 createdAt: parsed.createdAt,
@@ -184,6 +187,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               id: base.id,
               title: edit.title,
               description: edit.description,
+              imageUrl: base.imageUrl,
               lat: base.lat,
               lon: base.lon,
               createdAt: base.createdAt,
@@ -199,6 +203,69 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
               creatorEmail: base.creatorEmail,
               creatorName: base.creatorName,
             );
+
+      // Handle image actions after metadata save:
+      if (edit.removeImage) {
+        await ApiClient.instance.delete(
+          '/events/${base.id}/image',
+          withAuth: true,
+        );
+        updated = Event(
+          id: updated.id,
+          title: updated.title,
+          description: updated.description,
+          imageUrl: null,
+          lat: updated.lat,
+          lon: updated.lon,
+          createdAt: updated.createdAt,
+          markerColorValue: updated.markerColorValue,
+          markerIconCodePoint: updated.markerIconCodePoint,
+          rsvpStatus: updated.rsvpStatus,
+          goingUsers: updated.goingUsers,
+          notGoingUsers: updated.notGoingUsers,
+          goingUserProfiles: updated.goingUserProfiles,
+          notGoingUserProfiles: updated.notGoingUserProfiles,
+          endsAt: updated.endsAt,
+          creatorId: updated.creatorId,
+          creatorEmail: updated.creatorEmail,
+          creatorName: updated.creatorName,
+        );
+      } else if (edit.localImagePath != null &&
+          edit.localImagePath!.trim().isNotEmpty) {
+        final file = File(edit.localImagePath!);
+        final bytes = await file.readAsBytes();
+        final filename = edit.localImagePath!.split(Platform.pathSeparator).last;
+        final upload = await ApiClient.instance.uploadImage(
+          '/events/${base.id}/image',
+          bytes: bytes,
+          filename: filename.isEmpty ? 'event.jpg' : filename,
+          fieldName: 'image',
+          withAuth: true,
+        );
+        final imageUrl = upload['image_url']?.toString();
+        updated = Event(
+          id: updated.id,
+          title: updated.title,
+          description: updated.description,
+          imageUrl: (imageUrl != null && imageUrl.trim().isNotEmpty)
+              ? imageUrl.trim()
+              : updated.imageUrl,
+          lat: updated.lat,
+          lon: updated.lon,
+          createdAt: updated.createdAt,
+          markerColorValue: updated.markerColorValue,
+          markerIconCodePoint: updated.markerIconCodePoint,
+          rsvpStatus: updated.rsvpStatus,
+          goingUsers: updated.goingUsers,
+          notGoingUsers: updated.notGoingUsers,
+          goingUserProfiles: updated.goingUserProfiles,
+          notGoingUserProfiles: updated.notGoingUserProfiles,
+          endsAt: updated.endsAt,
+          creatorId: updated.creatorId,
+          creatorEmail: updated.creatorEmail,
+          creatorName: updated.creatorName,
+        );
+      }
 
       if (!mounted) return;
       setState(() {
@@ -310,6 +377,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
           id: base.id,
           title: base.title,
           description: base.description,
+          imageUrl: base.imageUrl,
           lat: base.lat,
           lon: base.lon,
           createdAt: base.createdAt,
@@ -438,6 +506,33 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                 ),
                               ),
                               const SizedBox(height: 8),
+                            ],
+                            if ((ApiClient.getFullImageUrl(event.imageUrl) ?? '')
+                                .trim()
+                                .isNotEmpty) ...[
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  height: 200,
+                                  child: Image.network(
+                                    ApiClient.getFullImageUrl(event.imageUrl)!,
+                                    fit: BoxFit.cover,
+                                    alignment: Alignment.center,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      height: 200,
+                                      color: const Color(0xFF141414),
+                                      child: const Center(
+                                        child: Icon(
+                                          Icons.broken_image_outlined,
+                                          color: Colors.white70,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
                             ],
                             // Заголовок и даты
                             DetailEventHeader(

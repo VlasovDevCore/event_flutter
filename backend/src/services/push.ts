@@ -70,6 +70,46 @@ async function fetchTokensForUser(userId: string): Promise<string[]> {
   return r.rows.map((row) => row.token as string);
 }
 
+async function isDirectChatMuted(params: {
+  recipientUserId: string;
+  peerUserId: string;
+}): Promise<boolean> {
+  const { recipientUserId, peerUserId } = params;
+  const r = await pool.query(
+    `
+    SELECT 1
+    FROM user_direct_chat_mutes
+    WHERE user_id = $1
+      AND peer_user_id = $2
+      AND muted_until IS NOT NULL
+      AND muted_until > now()
+    LIMIT 1
+    `,
+    [recipientUserId, peerUserId],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+async function isEventChatMuted(params: {
+  recipientUserId: string;
+  eventId: string;
+}): Promise<boolean> {
+  const { recipientUserId, eventId } = params;
+  const r = await pool.query(
+    `
+    SELECT 1
+    FROM user_event_chat_mutes
+    WHERE user_id = $1
+      AND event_id = $2
+      AND muted_until IS NOT NULL
+      AND muted_until > now()
+    LIMIT 1
+    `,
+    [recipientUserId, eventId],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
 async function removeInvalidTokens(invalid: string[]): Promise<void> {
   if (invalid.length === 0) return;
   await pool.query(`DELETE FROM user_push_tokens WHERE token = ANY($1::text[])`, [invalid]);
@@ -120,6 +160,9 @@ export async function notifyDirectMessage(params: {
   text: string;
 }): Promise<void> {
   const { recipientUserId, senderUserId, senderLabel, messageId, text } = params;
+  if (await isDirectChatMuted({ recipientUserId, peerUserId: senderUserId })) {
+    return;
+  }
   const tokens = await fetchTokensForUser(recipientUserId);
   if (tokens.length === 0) return;
 
@@ -160,6 +203,9 @@ export async function notifyEventChatMessage(params: {
 
   for (const row of r.rows) {
     const uid = row.user_id as string;
+    if (await isEventChatMuted({ recipientUserId: uid, eventId })) {
+      continue;
+    }
     const tokens = await fetchTokensForUser(uid);
     if (tokens.length === 0) continue;
     await sendToTokens(

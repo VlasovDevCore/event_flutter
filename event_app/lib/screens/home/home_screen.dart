@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -48,6 +49,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Timer? _geoMoveTimer;
   bool _isLoadingProfile = false;
   int _directUnreadCount = 0;
+  int _eventUnreadCount = 0;
+  int _incomingFriendRequestsCount = 0;
+  bool _hasUnreadNews = false;
 
   String? _currentUserEmail() {
     final authBox = Hive.box('authBox');
@@ -104,12 +108,18 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _loadEventsFromApi();
     _initLocation(zoom: 13, immediateZoom: false);
     _fetchDirectUnreadCount();
+    _fetchEventUnreadCount();
+    _fetchIncomingFriendRequestsCount();
+    _fetchUnreadNewsFlag();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _fetchDirectUnreadCount();
+      _fetchEventUnreadCount();
+      _fetchIncomingFriendRequestsCount();
+      _fetchUnreadNewsFlag();
     }
   }
 
@@ -129,6 +139,54 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     } catch (_) {
       /* сеть / не авторизован — тихо */
     }
+  }
+
+  Future<void> _fetchEventUnreadCount() async {
+    if (Hive.box('authBox').get('token') == null) {
+      if (mounted) setState(() => _eventUnreadCount = 0);
+      return;
+    }
+    try {
+      final map = await ApiClient.instance.get(
+        '/events/unread-count',
+        withAuth: true,
+      );
+      final raw = map['count'];
+      final n = raw is int ? raw : int.tryParse('$raw') ?? 0;
+      if (mounted) setState(() => _eventUnreadCount = n < 0 ? 0 : n);
+    } catch (_) {}
+  }
+
+  Future<void> _fetchIncomingFriendRequestsCount() async {
+    if (Hive.box('authBox').get('token') == null) {
+      if (mounted) setState(() => _incomingFriendRequestsCount = 0);
+      return;
+    }
+    try {
+      final list = await ApiClient.instance.getList(
+        '/friends/requests',
+        withAuth: true,
+      );
+      final n = list.length;
+      if (mounted) {
+        setState(() => _incomingFriendRequestsCount = n < 0 ? 0 : n);
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _fetchUnreadNewsFlag() async {
+    if (Hive.box('authBox').get('token') == null) {
+      if (mounted) setState(() => _hasUnreadNews = false);
+      return;
+    }
+    try {
+      final data = await ApiClient.instance.get(
+        '/events/news/unread-flag',
+        withAuth: true,
+      );
+      final has = data['has_unread'] == true;
+      if (mounted) setState(() => _hasUnreadNews = has);
+    } catch (_) {}
   }
 
   // Новый метод для загрузки профиля пользователя
@@ -658,10 +716,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       );
 
       final me = _currentUserEmail();
-      final newEvent = Event(
+      Event newEvent = Event(
         id: created['id'] as String,
         title: created['title'] as String,
         description: created['description'] as String? ?? '',
+        imageUrl: created['image_url']?.toString(),
         lat: (created['lat'] as num).toDouble(),
         lon: (created['lon'] as num).toDouble(),
         createdAt: DateTime.parse(created['created_at'] as String),
@@ -687,6 +746,51 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         _events = [..._events, newEvent];
       });
       _recomputeVisibleEvents();
+
+      // Если пользователь выбрал фото события на шаге создания — загрузим его после создания события.
+      final localPath = event.localImagePath;
+      if (localPath != null && localPath.trim().isNotEmpty) {
+        try {
+          final bytes = await File(localPath).readAsBytes();
+          final uploaded = await client.uploadImage(
+            '/events/${newEvent.id}/image',
+            bytes: bytes,
+            filename: 'event-${newEvent.id}.jpg',
+            fieldName: 'image',
+            withAuth: true,
+          );
+          final imageUrl = (uploaded['image_url'] ?? uploaded['imageUrl'])?.toString();
+          if (imageUrl != null && imageUrl.trim().isNotEmpty && mounted) {
+            setState(() {
+              _events = _events.map((e) {
+                if (e.id != newEvent.id) return e;
+                return Event(
+                  id: e.id,
+                  title: e.title,
+                  description: e.description,
+                  imageUrl: imageUrl,
+                  lat: e.lat,
+                  lon: e.lon,
+                  createdAt: e.createdAt,
+                  markerColorValue: e.markerColorValue,
+                  markerIconCodePoint: e.markerIconCodePoint,
+                  rsvpStatus: e.rsvpStatus,
+                  goingUsers: e.goingUsers,
+                  notGoingUsers: e.notGoingUsers,
+                  goingUserProfiles: e.goingUserProfiles,
+                  notGoingUserProfiles: e.notGoingUserProfiles,
+                  endsAt: e.endsAt,
+                  creatorId: e.creatorId,
+                  creatorEmail: e.creatorEmail,
+                  creatorName: e.creatorName,
+                );
+              }).toList();
+            });
+          }
+        } catch (_) {
+          // не блокируем UX создания события, если загрузка фото не удалась
+        }
+      }
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(
@@ -909,19 +1013,43 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   child: InkWell(
                     borderRadius: BorderRadius.circular(10),
                     onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const NewsScreen(),
-                        ),
-                      );
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const NewsScreen(),
+                            ),
+                          )
+                          .then((_) => _fetchUnreadNewsFlag());
                     },
                     splashColor: const Color.fromARGB(157, 0, 0, 0),
                     highlightColor: const Color.fromARGB(157, 0, 0, 0),
-                    child: const Center(
-                      child: Icon(
-                        Icons.featured_play_list,
-                        color: Colors.white,
-                        size: 19,
+                    child: Center(
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          const Icon(
+                            Icons.featured_play_list,
+                            color: Colors.white,
+                            size: 19,
+                          ),
+                          if (_hasUnreadNews)
+                            Positioned(
+                              right: -2,
+                              top: -2,
+                              child: Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xCC161616),
+                                    width: 1.5,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
                   ),
@@ -941,22 +1069,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   ),
                   _mapRoundIconButton(
                     icon: Icons.chat,
+                    badgeCount: _eventUnreadCount > 0 ? _eventUnreadCount : null,
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const MyRoomsScreen(),
-                        ),
-                      );
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const MyRoomsScreen(),
+                            ),
+                          )
+                          .then((_) => _fetchEventUnreadCount());
                     },
                   ),
                   _mapRoundIconButton(
                     icon: Icons.people,
+                    badgeCount: _incomingFriendRequestsCount > 0
+                        ? _incomingFriendRequestsCount
+                        : null,
                     onPressed: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute<void>(
-                          builder: (_) => const FriendsScreen(),
-                        ),
-                      );
+                      Navigator.of(context)
+                          .push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => const FriendsScreen(),
+                            ),
+                          )
+                          .then((_) => _fetchIncomingFriendRequestsCount());
                     },
                   ),
                   _mapRoundIconButton(

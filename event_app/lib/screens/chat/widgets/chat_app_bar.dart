@@ -196,6 +196,18 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
             const SizedBox(height: 12),
             ListTile(
+              leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
+              title: const Text(
+                'Уведомления',
+                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _showNotificationsSheet(context, event);
+              },
+            ),
+            Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+            ListTile(
               leading: Icon(Icons.event_rounded, color: scheme.primary),
               title: const Text(
                 'Подробности события',
@@ -237,6 +249,141 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+
+  static Future<void> _showNotificationsSheet(BuildContext context, Event event) async {
+    final scheme = Theme.of(context).colorScheme;
+
+    Future<DateTime?> loadMutedUntil() async {
+      try {
+        final data = await ApiClient.instance.get(
+          '/events/${event.id}/mute',
+          withAuth: true,
+        );
+        final raw = data['muted_until'];
+        if (raw is String && raw.trim().isNotEmpty) {
+          return DateTime.tryParse(raw)?.toLocal();
+        }
+      } catch (_) {}
+      return null;
+    }
+
+    Future<void> setMuteUntil(DateTime? untilUtc) async {
+      await ApiClient.instance.post(
+        '/events/${event.id}/mute',
+        withAuth: true,
+        body: {'muted_until': untilUtc?.toIso8601String()},
+      );
+    }
+
+    DateTime? mutedUntil = await loadMutedUntil();
+    bool isMutedNow() => mutedUntil != null && mutedUntil!.isAfter(DateTime.now());
+
+    if (!context.mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF25262B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setState) {
+          final muted = isMutedNow();
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const SizedBox(height: 8),
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
+                  title: const Text(
+                    'Уведомления',
+                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: muted
+                      ? Text(
+                          'Отключены',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: scheme.onSurfaceVariant,
+                            fontSize: 13,
+                          ),
+                        )
+                      : null,
+                ),
+                if (muted) ...[
+                  ListTile(
+                    leading: Icon(Icons.notifications_active_rounded, color: scheme.primary),
+                    title: const Text('Включить уведомления'),
+                    onTap: () async {
+                      await setMuteUntil(null);
+                      mutedUntil = null;
+                      if (ctx.mounted) setState(() {});
+                      if (context.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                  Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+                ],
+                ListTile(
+                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+                  title: const Text('Отключить на 1 час'),
+                  onTap: () async {
+                    final until = DateTime.now().add(const Duration(hours: 1)).toUtc();
+                    await setMuteUntil(until);
+                    mutedUntil = until.toLocal();
+                    if (ctx.mounted) setState(() {});
+                    if (context.mounted) Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+                  title: const Text('Отключить на 8 часов'),
+                  onTap: () async {
+                    final until = DateTime.now().add(const Duration(hours: 8)).toUtc();
+                    await setMuteUntil(until);
+                    mutedUntil = until.toLocal();
+                    if (ctx.mounted) setState(() {});
+                    if (context.mounted) Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+                  title: const Text('Отключить на 2 дня'),
+                  onTap: () async {
+                    final until = DateTime.now().add(const Duration(days: 2)).toUtc();
+                    await setMuteUntil(until);
+                    mutedUntil = until.toLocal();
+                    if (ctx.mounted) setState(() {});
+                    if (context.mounted) Navigator.pop(ctx);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+                  title: const Text('Отключить навсегда'),
+                  onTap: () async {
+                    final until = DateTime.now().add(const Duration(days: 3650)).toUtc();
+                    await setMuteUntil(until);
+                    mutedUntil = until.toLocal();
+                    if (ctx.mounted) setState(() {});
+                    if (context.mounted) Navigator.pop(ctx);
+                  },
+                ),
+                const SizedBox(height: 8),
+              ],
+            ),
+          );
+        },
       ),
     );
   }

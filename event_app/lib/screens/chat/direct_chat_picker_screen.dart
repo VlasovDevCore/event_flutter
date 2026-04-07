@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -15,10 +17,51 @@ class DirectChatPickerScreen extends StatefulWidget {
 
 class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
   List<Map<String, dynamic>> _friends = [];
+
   /// Сколько непрочитанных входящих от каждого друга (ключ — id пользователя).
   Map<String, int> _unreadByPeerId = {};
+  Map<String, DateTime?> _mutedUntilByPeerId = {};
   bool _loading = true;
   String? _error;
+
+  bool _isMutedNow(String peerId) {
+    final until = _mutedUntilByPeerId[peerId];
+    if (until == null) return false;
+    return until.isAfter(DateTime.now());
+  }
+
+  Future<DateTime?> _fetchMuteUntil(String peerId) async {
+    try {
+      final data = await ApiClient.instance.get(
+        '/messages/with/$peerId/mute',
+        withAuth: true,
+      );
+      final raw = data['muted_until'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        return DateTime.tryParse(raw)?.toLocal();
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> _loadMuteStatusesForFriends(List<Map<String, dynamic>> friends) async {
+    final ids = <String>[];
+    for (final f in friends) {
+      final id = f['id']?.toString();
+      if (id != null && id.trim().isNotEmpty) ids.add(id);
+    }
+    if (ids.isEmpty) return;
+
+    final results = await Future.wait<DateTime?>(
+      ids.map(_fetchMuteUntil),
+    );
+    if (!mounted) return;
+    final map = <String, DateTime?>{};
+    for (var i = 0; i < ids.length; i++) {
+      map[ids[i]] = results[i];
+    }
+    setState(() => _mutedUntilByPeerId = map);
+  }
 
   Future<Map<String, int>> _fetchUnreadByPeerMap() async {
     if (Hive.box('authBox').get('token') == null) return {};
@@ -64,17 +107,22 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
       final list = batch[0] as List<dynamic>;
       final unread = batch[1] as Map<String, int>;
       if (!mounted) return;
+      final friends = list
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
       setState(() {
-        _friends = list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+        _friends = friends;
         _unreadByPeerId = unread;
         _loading = false;
       });
+      unawaited(_loadMuteStatusesForFriends(friends));
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.statusCode == 401 ? 'Войдите в аккаунт' : e.message;
         _friends = [];
         _unreadByPeerId = {};
+        _mutedUntilByPeerId = {};
         _loading = false;
       });
     } catch (e) {
@@ -83,6 +131,7 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
         _error = e.toString();
         _friends = [];
         _unreadByPeerId = {};
+        _mutedUntilByPeerId = {};
         _loading = false;
       });
     }
@@ -110,87 +159,103 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          _error!,
-                          textAlign: TextAlign.center,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _load,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Повторить'),
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      _error!,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton.icon(
+                      onPressed: _load,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Повторить'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          : _friends.isEmpty
+          ? Center(
+              child: Text(
+                'Нет друзей для переписки.\nДобавьте друзей в разделе «Люди».',
+                textAlign: TextAlign.center,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: Colors.grey),
+              ),
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              itemCount: _friends.length,
+              separatorBuilder: (context, _) => const Divider(height: 1),
+              itemBuilder: (context, index) {
+                final f = _friends[index];
+                final email = f['email'] as String? ?? '—';
+                final id = f['id'] as String?;
+                final username = (f['username'] as String?)?.trim();
+                final displayName = (f['display_name'] as String?)?.trim();
+                final title = (displayName?.isNotEmpty == true)
+                    ? displayName!
+                    : (username?.isNotEmpty == true ? '@$username' : email);
+                final subtitle = username?.isNotEmpty == true
+                    ? '@$username'
+                    : email;
+                final avatarUrl = ApiClient.getFullImageUrl(
+                  f['avatar_url'] as String?,
+                );
+                final unread = id != null ? (_unreadByPeerId[id] ?? 0) : 0;
+                final isMuted = id != null && _isMutedNow(id);
+
+                return ListTile(
+                  leading: _FriendAvatar(avatarUrl: avatarUrl),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(title)),
+                      if (isMuted) ...[
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.notifications_off_outlined,
+                          size: 16,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                              .withValues(alpha: 0.9),
                         ),
                       ],
-                    ),
+                    ],
                   ),
-                )
-              : _friends.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Нет друзей для переписки.\nДобавьте друзей в разделе «Люди».',
-                        textAlign: TextAlign.center,
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.grey,
-                            ),
-                      ),
-                    )
-                  : ListView.separated(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _friends.length,
-                      separatorBuilder: (context, _) =>
-                          const Divider(height: 1),
-                      itemBuilder: (context, index) {
-                        final f = _friends[index];
-                        final email = f['email'] as String? ?? '—';
-                        final id = f['id'] as String?;
-                        final username = (f['username'] as String?)?.trim();
-                        final displayName = (f['display_name'] as String?)?.trim();
-                        final title = (displayName?.isNotEmpty == true)
-                            ? displayName!
-                            : (username?.isNotEmpty == true ? '@$username' : email);
-                        final subtitle =
-                            username?.isNotEmpty == true ? '@$username' : email;
-                        final avatarUrl =
-                            ApiClient.getFullImageUrl(f['avatar_url'] as String?);
-                        final unread =
-                            id != null ? (_unreadByPeerId[id] ?? 0) : 0;
-
-                        return ListTile(
-                          leading: _FriendAvatar(avatarUrl: avatarUrl),
-                          title: Text(title),
-                          subtitle: Text(subtitle),
-                          trailing: _ChatTrailing(unread: unread),
-                          onTap: id == null
-                              ? null
-                              : () {
-                                  Navigator.of(context)
-                                      .push<void>(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => DirectChatScreen(
-                                        userId: id,
-                                        title: title,
-                                      ),
-                                    ),
-                                  )
-                                      .then((_) async {
-                                    final u = await _fetchUnreadByPeerMap();
-                                    if (mounted) {
-                                      setState(() => _unreadByPeerId = u);
-                                    }
-                                  });
-                                },
-                        );
-                      },
-                    ),
+                  subtitle: Text(subtitle),
+                  trailing: _ChatTrailing(unread: unread),
+                  onTap: id == null
+                      ? null
+                      : () {
+                          Navigator.of(context)
+                              .push<void>(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => DirectChatScreen(
+                                    userId: id,
+                                    title: title,
+                                  ),
+                                ),
+                              )
+                              .then((_) async {
+                                final u = await _fetchUnreadByPeerMap();
+                                if (mounted) {
+                                  setState(() => _unreadByPeerId = u);
+                                }
+                              });
+                        },
+                );
+              },
+            ),
     );
   }
 
@@ -243,10 +308,7 @@ class _ChatTrailing extends StatelessWidget {
       color: Theme.of(context).colorScheme.onSurfaceVariant,
     );
     if (unread <= 0) return icon;
-    return Badge(
-      label: Text(unread > 99 ? '99+' : '$unread'),
-      child: icon,
-    );
+    return Badge(label: Text(unread > 99 ? '99+' : '$unread'), child: icon);
   }
 }
 
@@ -283,10 +345,8 @@ class _FriendAvatar extends StatelessWidget {
                 ),
               ),
             ),
-            errorWidget: (context, url, error) => Icon(
-              Icons.person,
-              color: scheme.onSurfaceVariant,
-            ),
+            errorWidget: (context, url, error) =>
+                Icon(Icons.person, color: scheme.onSurfaceVariant),
           ),
         ),
       );

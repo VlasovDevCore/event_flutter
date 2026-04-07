@@ -2,14 +2,20 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../services/api_client.dart';
-import '../../profile/profile_screen.dart';
-
 /// Шапка личного чата — высота и кнопки как у [ChatAppBar], контент — собеседник.
 class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const DirectChatAppBar({
     super.key,
     required this.peerUserId,
     required this.title,
+    required this.isMuted,
+    required this.isBlocked,
+    required this.canClearChat,
+    required this.onMuteFor,
+    required this.onUnmute,
+    required this.onOpenProfile,
+    required this.onDeleteChat,
+    required this.onToggleBlockUser,
     this.subtitle,
     this.avatarUrl,
     required this.titleLetter,
@@ -17,6 +23,14 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   final String peerUserId;
   final String title;
+  final bool isMuted;
+  final bool isBlocked;
+  final bool canClearChat;
+  final void Function(Duration duration) onMuteFor;
+  final VoidCallback onUnmute;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onDeleteChat;
+  final VoidCallback onToggleBlockUser;
   final String? subtitle;
   final String? avatarUrl;
   final String titleLetter;
@@ -42,13 +56,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       title: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => ProfileScreen(userId: peerUserId),
-              ),
-            );
-          },
+          onTap: onOpenProfile,
           borderRadius: BorderRadius.circular(12),
           splashColor: scheme.primary.withValues(alpha: 0.12),
           highlightColor: scheme.primary.withValues(alpha: 0.06),
@@ -69,16 +77,30 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              title,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (isMuted) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.notifications_off_outlined,
+                              size: 16,
+                              color: subtitleColor.withValues(alpha: 0.95),
+                            ),
+                          ],
+                        ],
                       ),
                       if (subtitle != null && subtitle!.trim().isNotEmpty) ...[
                         const SizedBox(height: 4),
@@ -129,17 +151,15 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       scrolledUnderElevation: 0,
       centerTitle: false,
       actions: [
-        _RoundIconButton(
-          icon: Icons.person_outline_rounded,
-          onPressed: () {
-            Navigator.of(context).push<void>(
-              MaterialPageRoute<void>(
-                builder: (_) => ProfileScreen(userId: peerUserId),
-              ),
-            );
-          },
-          tooltip: 'Профиль',
-          alignEnd: true,
+        _MoreMenuButton(
+          isMuted: isMuted,
+          isBlocked: isBlocked,
+          canClearChat: canClearChat,
+          onMuteFor: onMuteFor,
+          onUnmute: onUnmute,
+          onOpenProfile: onOpenProfile,
+          onDeleteChat: onDeleteChat,
+          onToggleBlockUser: onToggleBlockUser,
         ),
       ],
       leading: _RoundIconButton(
@@ -243,5 +263,231 @@ class _RoundIconButton extends StatelessWidget {
       btn = Tooltip(message: tooltip!, child: btn);
     }
     return btn;
+  }
+}
+
+class _MoreMenuButton extends StatelessWidget {
+  const _MoreMenuButton({
+    required this.isMuted,
+    required this.isBlocked,
+    required this.canClearChat,
+    required this.onMuteFor,
+    required this.onUnmute,
+    required this.onOpenProfile,
+    required this.onDeleteChat,
+    required this.onToggleBlockUser,
+  });
+
+  final bool isMuted;
+  final bool isBlocked;
+  final bool canClearChat;
+  final void Function(Duration duration) onMuteFor;
+  final VoidCallback onUnmute;
+  final VoidCallback onOpenProfile;
+  final VoidCallback onDeleteChat;
+  final VoidCallback onToggleBlockUser;
+
+  Future<void> _showNotificationsSheet(BuildContext context) async {
+    final scheme = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF25262B),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
+              title: const Text(
+                'Уведомления',
+                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (isMuted) ...[
+              ListTile(
+                leading: Icon(Icons.notifications_active_rounded, color: scheme.primary),
+                title: const Text('Включить уведомления'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onUnmute();
+                },
+              ),
+              Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+            ],
+            ListTile(
+              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+              title: const Text('Отключить на 1 час'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onMuteFor(const Duration(hours: 1));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+              title: const Text('Отключить на 8 часов'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onMuteFor(const Duration(hours: 8));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+              title: const Text('Отключить на 2 дня'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onMuteFor(const Duration(days: 2));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
+              title: const Text('Отключить навсегда'),
+              onTap: () {
+                Navigator.pop(ctx);
+                onMuteFor(const Duration(days: 3650));
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            showModalBottomSheet<void>(
+              context: context,
+              backgroundColor: const Color(0xFF25262B),
+              shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              builder: (ctx) => SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.18),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ListTile(
+                      leading: Icon(
+                        isMuted
+                            ? Icons.notifications_off_outlined
+                            : Icons.notifications_outlined,
+                        color: scheme.primary,
+                      ),
+                      title: const Text(
+                        'Уведомления',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: isMuted
+                          ? Text(
+                              'Отключены',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: scheme.onSurfaceVariant,
+                                fontSize: 13,
+                              ),
+                            )
+                          : null,
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        _showNotificationsSheet(context);
+                      },
+                    ),
+                    Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+                    ListTile(
+                      leading: Icon(Icons.person_outline_rounded, color: scheme.primary),
+                      title: const Text(
+                        'Перейти в профиль',
+                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        onOpenProfile();
+                      },
+                    ),
+                    Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+                    if (canClearChat)
+                      ListTile(
+                        leading: Icon(Icons.delete_outline_rounded, color: scheme.error),
+                        title: Text(
+                          'Очистить чат',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontWeight: FontWeight.w600,
+                            color: scheme.error,
+                          ),
+                        ),
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          onDeleteChat();
+                        },
+                      ),
+                    ListTile(
+                      leading: Icon(
+                        isBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
+                        color: scheme.error,
+                      ),
+                      title: Text(
+                        isBlocked ? 'Разблокировать пользователя' : 'Заблокировать пользователя',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                          color: scheme.error,
+                        ),
+                      ),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        onToggleBlockUser();
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                ),
+              ),
+            );
+          },
+          child: const SizedBox(
+            width: 40,
+            height: 40,
+            child: Icon(Icons.more_horiz_rounded, size: 22),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -221,6 +221,7 @@ class _EventDateTimePickerState extends State<EventDateTimePicker> {
               firstDay: widget.firstAllowedDay,
               lastDay: widget.lastAllowedDay,
               focusedDay: _focusedDay,
+              availableGestures: AvailableGestures.horizontalSwipe,
               selectedDayPredicate: (day) =>
                   widget.endsAt != null && isSameDay(day, widget.endsAt),
               availableCalendarFormats: const {CalendarFormat.month: 'Month'},

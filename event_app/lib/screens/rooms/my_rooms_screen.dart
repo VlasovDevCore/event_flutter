@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:hive_flutter/hive_flutter.dart';
+import 'dart:io';
 
 import '../../models/event.dart';
 import '../../services/api_client.dart';
@@ -41,6 +42,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
   List<Event> _roomsParticipating = [];
   List<Event> _roomsCreated = [];
   final Map<String, _ParticipantsData> _participantsByEventId = {};
+  final Map<String, _RoomMeta> _metaByEventId = {};
 
   bool _loadingParticipating = true;
   bool _loadingCreated = true;
@@ -81,6 +83,53 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
     await Future.wait([_loadParticipating(), _loadCreated()]);
   }
 
+  int _unreadCountForEvent(String eventId) =>
+      _metaByEventId[eventId]?.unreadCount ?? 0;
+
+  bool _isMutedNowForEvent(String eventId) {
+    final until = _metaByEventId[eventId]?.mutedUntil;
+    if (until == null) return false;
+    return until.isAfter(DateTime.now());
+  }
+
+  Future<void> _loadRoomsMetaFor(List<Event> events) async {
+    final ids =
+        events.map((e) => e.id).where((id) => id.trim().isNotEmpty).toList();
+    if (ids.isEmpty) return;
+    try {
+      final data = await ApiClient.instance.post(
+        '/events/rooms-meta',
+        withAuth: true,
+        body: {'eventIds': ids},
+      );
+      final byEvent = data['byEvent'];
+      if (byEvent is! Map) return;
+
+      final next = <String, _RoomMeta>{..._metaByEventId};
+      for (final entry in byEvent.entries) {
+        final eventId = entry.key.toString();
+        final v = entry.value;
+        if (v is! Map) continue;
+        final unreadRaw = v['unread_count'];
+        final mutedRaw = v['muted_until'];
+        final unread =
+            unreadRaw is int ? unreadRaw : int.tryParse('$unreadRaw') ?? 0;
+        DateTime? mutedUntil;
+        if (mutedRaw is String && mutedRaw.trim().isNotEmpty) {
+          mutedUntil = DateTime.tryParse(mutedRaw)?.toLocal();
+        }
+        next[eventId] = _RoomMeta(unreadCount: unread, mutedUntil: mutedUntil);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _metaByEventId
+          ..clear()
+          ..addAll(next);
+      });
+    } catch (_) {}
+  }
+
   Future<void> _loadParticipating() async {
     setState(() {
       _loadingParticipating = true;
@@ -101,6 +150,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
         _roomsParticipating = events;
         _loadingParticipating = false;
       });
+      await _loadRoomsMetaFor(events);
       await _loadParticipantsForEvents(events);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -141,6 +191,7 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
         _roomsCreated = events;
         _loadingCreated = false;
       });
+      await _loadRoomsMetaFor(events);
       await _loadParticipantsForEvents(events);
     } on ApiException catch (e) {
       if (!mounted) return;
@@ -254,6 +305,8 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
     final participants =
         participantsData?.participants ?? const <PreviewParticipant>[];
     final totalGoing = participantsData?.totalGoing ?? 0;
+    final unread = _unreadCountForEvent(event.id);
+    final isMuted = _isMutedNowForEvent(event.id);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
@@ -313,6 +366,14 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
               subtitle: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
+                  if (isMuted) ...[
+                    Icon(
+                      Icons.notifications_off_outlined,
+                      size: 14,
+                      color: const Color(0xFFB5BBC7).withOpacity(0.9),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -347,28 +408,42 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
                   ),
                 ],
               ),
-              trailing: Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: IconButton(
-                  padding: EdgeInsets.zero,
-                  icon: const Icon(
-                    Icons.chat_bubble_outline,
-                    color: Color(0xFF161616),
-                    size: 18,
-                  ),
-                  onPressed: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(
-                        builder: (_) => EventChatScreen(event: event),
+              trailing: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: const Icon(
+                        Icons.chat_bubble_outline,
+                        color: Color(0xFF161616),
+                        size: 18,
                       ),
-                    );
-                  },
-                ),
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => EventChatScreen(event: event),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  if (unread > 0)
+                    Positioned(
+                      right: -6,
+                      top: -6,
+                      child: Badge(
+                        label: Text(unread > 99 ? '99+' : '$unread'),
+                        child: const SizedBox(width: 1, height: 1),
+                      ),
+                    ),
+                ],
               ),
             ),
           ),
@@ -631,10 +706,11 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
       );
 
       final me = _currentUserEmail();
-      final newEvent = Event(
+      Event newEvent = Event(
         id: created['id'] as String,
         title: created['title'] as String,
         description: created['description'] as String? ?? '',
+        imageUrl: created['image_url']?.toString(),
         lat: (created['lat'] as num).toDouble(),
         lon: (created['lon'] as num).toDouble(),
         createdAt: DateTime.parse(created['created_at'] as String),
@@ -659,6 +735,49 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
       setState(() {
         _roomsCreated = [..._roomsCreated, newEvent];
       });
+
+      final localPath = event.localImagePath;
+      if (localPath != null && localPath.trim().isNotEmpty) {
+        try {
+          final bytes = await File(localPath).readAsBytes();
+          final uploaded = await client.uploadImage(
+            '/events/${newEvent.id}/image',
+            bytes: bytes,
+            filename: 'event-${newEvent.id}.jpg',
+            fieldName: 'image',
+            withAuth: true,
+          );
+          final imageUrl =
+              (uploaded['image_url'] ?? uploaded['imageUrl'])?.toString();
+          if (imageUrl != null && imageUrl.trim().isNotEmpty && mounted) {
+            setState(() {
+              _roomsCreated = _roomsCreated.map((e) {
+                if (e.id != newEvent.id) return e;
+                return Event(
+                  id: e.id,
+                  title: e.title,
+                  description: e.description,
+                  imageUrl: imageUrl,
+                  lat: e.lat,
+                  lon: e.lon,
+                  createdAt: e.createdAt,
+                  markerColorValue: e.markerColorValue,
+                  markerIconCodePoint: e.markerIconCodePoint,
+                  rsvpStatus: e.rsvpStatus,
+                  goingUsers: e.goingUsers,
+                  notGoingUsers: e.notGoingUsers,
+                  goingUserProfiles: e.goingUserProfiles,
+                  notGoingUserProfiles: e.notGoingUserProfiles,
+                  endsAt: e.endsAt,
+                  creatorId: e.creatorId,
+                  creatorEmail: e.creatorEmail,
+                  creatorName: e.creatorName,
+                );
+              }).toList();
+            });
+          }
+        } catch (_) {}
+      }
 
       // Переключаемся на вкладку "Создал" чтобы увидеть новое событие
       _tabController.animateTo(1);
@@ -836,4 +955,11 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
       ),
     );
   }
+}
+
+class _RoomMeta {
+  const _RoomMeta({required this.unreadCount, required this.mutedUntil});
+
+  final int unreadCount;
+  final DateTime? mutedUntil;
 }

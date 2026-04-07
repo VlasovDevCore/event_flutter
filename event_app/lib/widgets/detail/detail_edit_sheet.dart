@@ -1,5 +1,10 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
 import '../../config/event_marker_catalog.dart';
+import '../../services/api_client.dart';
 import '../event_marker_widget.dart';
 import 'detail_edit_payload.dart';
 
@@ -8,6 +13,7 @@ class DetailEditSheet extends StatefulWidget {
     super.key,
     required this.initialTitle,
     required this.initialDescription,
+    required this.initialImageUrl,
     required this.initialColor,
     required this.initialIcon,
     required this.onSave,
@@ -15,6 +21,7 @@ class DetailEditSheet extends StatefulWidget {
 
   final String initialTitle;
   final String initialDescription;
+  final String? initialImageUrl;
   final Color initialColor;
   final IconData initialIcon;
   final Function(DetailEditPayload) onSave;
@@ -29,6 +36,10 @@ class _DetailEditSheetState extends State<DetailEditSheet> {
   late Color _selectedColor;
   late IconData _selectedIcon;
   late List<IconData> _icons;
+
+  String? _localImagePath;
+  bool _removeImage = false;
+  bool _photoBusy = false;
 
   static const Color _text = Color(0xFFDFE3EC);
   static const Color _subtitle = Color(0xFFB5BBC7);
@@ -51,6 +62,43 @@ class _DetailEditSheetState extends State<DetailEditSheet> {
     if (_icons.isEmpty) {
       _icons = EventMarkerCatalog.availableIconsForUserStatus(1);
     }
+  }
+
+  bool get _hasExistingServerImage =>
+      (ApiClient.getFullImageUrl(widget.initialImageUrl) ?? '').trim().isNotEmpty;
+
+  bool get _hasAnyImageNow =>
+      (_localImagePath != null) || (_hasExistingServerImage && !_removeImage);
+
+  Future<void> _pickNewImage() async {
+    if (_photoBusy) return;
+    setState(() => _photoBusy = true);
+    try {
+      final picker = ImagePicker();
+      final xfile = await picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (xfile == null || !mounted) return;
+      setState(() {
+        _localImagePath = xfile.path;
+        _removeImage = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Не удалось выбрать изображение')),
+      );
+    } finally {
+      if (mounted) setState(() => _photoBusy = false);
+    }
+  }
+
+  void _removeImageLocal() {
+    setState(() {
+      _localImagePath = null;
+      _removeImage = true;
+    });
   }
 
   @override
@@ -101,6 +149,94 @@ class _DetailEditSheetState extends State<DetailEditSheet> {
                   ],
                 ),
                 const SizedBox(height: 12),
+                const Text(
+                  'Фото',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    color: _text,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 200,
+                    child: _localImagePath != null
+                        ? Image.file(
+                            File(_localImagePath!),
+                            fit: BoxFit.cover,
+                            alignment: Alignment.center,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: const Color(0xFF141414),
+                              child: const Center(
+                                child: Icon(
+                                  Icons.broken_image_outlined,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ),
+                          )
+                        : (_hasExistingServerImage && !_removeImage)
+                            ? Image.network(
+                                ApiClient.getFullImageUrl(widget.initialImageUrl)!,
+                                fit: BoxFit.cover,
+                                alignment: Alignment.center,
+                                errorBuilder: (context, error, stackTrace) => Container(
+                                  color: const Color(0xFF141414),
+                                  child: const Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : Container(
+                                color: const Color(0xFF141414),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.image_outlined,
+                                    color: Colors.white54,
+                                  ),
+                                ),
+                              ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _photoBusy ? null : _pickNewImage,
+                        icon: _photoBusy
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.photo_library_outlined),
+                        label: Text(_hasAnyImageNow ? 'Изменить' : 'Добавить'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: (_hasAnyImageNow && !_photoBusy)
+                            ? _removeImageLocal
+                            : null,
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Удалить'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFFFF5F57),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 TextField(
                   controller: _titleController,
                   style: const TextStyle(
@@ -258,6 +394,8 @@ class _DetailEditSheetState extends State<DetailEditSheet> {
                           description: _descriptionController.text.trim(),
                           markerColorValue: _selectedColor.toARGB32(),
                           markerIconCodePoint: _selectedIcon.codePoint,
+                          localImagePath: _localImagePath,
+                          removeImage: _removeImage && _localImagePath == null,
                         ),
                       );
                     },

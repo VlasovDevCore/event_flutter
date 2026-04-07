@@ -3,6 +3,8 @@ class Event {
     required this.id,
     required this.title,
     required this.description,
+    this.imageUrl,
+    this.localImagePath,
     required this.lat,
     required this.lon,
     required this.createdAt,
@@ -22,6 +24,10 @@ class Event {
   final String id;
   final String title;
   final String description;
+  final String? imageUrl;
+
+  /// Локальный путь до изображения (только для черновиков до загрузки на сервер).
+  final String? localImagePath;
   final double lat;
   final double lon;
   final DateTime createdAt;
@@ -50,6 +56,8 @@ class Event {
       'id': id,
       'title': title,
       'description': description,
+      if (imageUrl != null) 'imageUrl': imageUrl,
+      if (localImagePath != null) 'localImagePath': localImagePath,
       'lat': lat,
       'lon': lon,
       'createdAt': createdAt.toIso8601String(),
@@ -80,6 +88,8 @@ class Event {
       id: map['id'] as String,
       title: map['title'] as String,
       description: map['description'] as String,
+      imageUrl: map['imageUrl']?.toString(),
+      localImagePath: map['localImagePath']?.toString(),
       lat: (map['lat'] as num).toDouble(),
       lon: (map['lon'] as num).toDouble(),
       createdAt: DateTime.parse(map['createdAt'] as String),
@@ -288,6 +298,7 @@ class Event {
       id: map['id'] as String,
       title: map['title'] as String,
       description: (map['description'] as String?) ?? '',
+      imageUrl: (map['image_url'] ?? map['imageUrl'])?.toString(),
       lat: ((map['lat'] as num?) ?? 0).toDouble(),
       lon: ((map['lon'] as num?) ?? 0).toDouble(),
       createdAt: DateTime.parse(

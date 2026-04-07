@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest } from '../middleware/auth';
 import { notifyDirectMessage } from '../services/push';
+import { decryptMessageText, encryptMessageText } from '../utils/messageCrypto';
 
 const router = Router();
 
@@ -108,6 +109,11 @@ router.get('/unread-count', authMiddleware, async (req: AuthRequest, res) => {
       WHERE m.to_user_id = $1
         AND m.from_user_id <> $1
         AND NOT EXISTS (
+          SELECT 1 FROM user_blocks b
+          WHERE (b.blocker_user_id = $1 AND b.blocked_user_id = m.from_user_id)
+             OR (b.blocker_user_id = m.from_user_id AND b.blocked_user_id = $1)
+        )
+        AND NOT EXISTS (
           SELECT 1 FROM direct_message_views v
           WHERE v.message_id = m.id AND v.user_id = $1
         )
@@ -138,6 +144,11 @@ router.get('/unread-by-peer', authMiddleware, async (req: AuthRequest, res) => {
       FROM direct_messages m
       WHERE m.to_user_id = $1
         AND m.from_user_id <> $1
+        AND NOT EXISTS (
+          SELECT 1 FROM user_blocks b
+          WHERE (b.blocker_user_id = $1 AND b.blocked_user_id = m.from_user_id)
+             OR (b.blocker_user_id = m.from_user_id AND b.blocked_user_id = $1)
+        )
         AND NOT EXISTS (
           SELECT 1 FROM direct_message_views v
           WHERE v.message_id = m.id AND v.user_id = $1
@@ -196,7 +207,118 @@ router.get('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
       `,
       [me, other],
     );
-    return res.json(result.rows);
+    const rows = result.rows.map((r) => ({
+      ...r,
+      text: decryptMessageText((r as any).text),
+      reply_to_text: decryptMessageText((r as any).reply_to_text),
+    }));
+    return res.json(rows);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Текущий mute push-уведомлений от пользователя (для меню в личном чате)
+router.get('/with/:userId/mute', authMiddleware, async (req: AuthRequest, res) => {
+  const me = req.user?.id;
+  const other = req.params.userId as string;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!other) return res.status(400).json({ error: 'Invalid userId' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      SELECT muted_until
+      FROM user_direct_chat_mutes
+      WHERE user_id = $1 AND peer_user_id = $2
+      `,
+      [me, other],
+    );
+    const mutedUntil = (r.rows[0]?.muted_until as Date | null | undefined) ?? null;
+    return res.json({ muted_until: mutedUntil ? mutedUntil.toISOString() : null });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Установить/сбросить mute push-уведомлений от пользователя
+router.post('/with/:userId/mute', authMiddleware, async (req: AuthRequest, res) => {
+  const me = req.user?.id;
+  const other = req.params.userId as string;
+  const { muted_until } = (req.body ?? {}) as { muted_until?: string | null };
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!other) return res.status(400).json({ error: 'Invalid userId' });
+
+  let parsed: Date | null = null;
+  if (muted_until === null) {
+    parsed = null;
+  } else if (muted_until === undefined) {
+    return res.status(400).json({ error: 'muted_until обязателен (ISO строка или null)' });
+  } else if (typeof muted_until !== 'string' || muted_until.trim() === '') {
+    return res.status(400).json({ error: 'muted_until: некорректное значение' });
+  } else {
+    const d = new Date(muted_until);
+    if (Number.isNaN(d.getTime())) {
+      return res.status(400).json({ error: 'muted_until: некорректный ISO формат' });
+    }
+    parsed = d;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query(
+      `
+      INSERT INTO user_direct_chat_mutes (user_id, peer_user_id, muted_until, updated_at)
+      VALUES ($1, $2, $3, now())
+      ON CONFLICT (user_id, peer_user_id)
+      DO UPDATE SET muted_until = EXCLUDED.muted_until, updated_at = now()
+      `,
+      [me, other, parsed],
+    );
+    return res.json({ success: true, muted_until: parsed ? parsed.toISOString() : null });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Удалить историю личного чата (обе стороны) для пары пользователей.
+// Используется из меню личного чата.
+router.delete('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
+  const me = req.user?.id;
+  const other = req.params.userId as string;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!other) return res.status(400).json({ error: 'Invalid userId' });
+  if (other === me) return res.status(400).json({ error: 'Invalid userId' });
+
+  const client = await pool.connect();
+  try {
+    const del = await client.query(
+      `
+      DELETE FROM direct_messages
+      WHERE (from_user_id = $1 AND to_user_id = $2)
+         OR (from_user_id = $2 AND to_user_id = $1)
+      `,
+      [me, other],
+    );
+    // Сбросим локальный mute (на всякий случай, чтобы UI не зависел от "старого" состояния)
+    await client.query(
+      `DELETE FROM user_direct_chat_mutes WHERE user_id = $1 AND peer_user_id = $2`,
+      [me, other],
+    );
+    return res.json({ success: true, deleted: del.rowCount ?? 0 });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
@@ -313,7 +435,7 @@ router.post('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
       VALUES ($1, $2, $3, $4)
       RETURNING id
       `,
-      [me, other, text.trim(), replyToId],
+      [me, other, encryptMessageText(text.trim()), replyToId],
     );
     const newId = insert.rows[0].id as string;
 
@@ -322,6 +444,8 @@ router.post('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
       [me, other, newId],
     );
     const row = full.rows[0] as Record<string, unknown>;
+    (row as any).text = decryptMessageText((row as any).text);
+    (row as any).reply_to_text = decryptMessageText((row as any).reply_to_text);
     const dn = String(row.user_display_name ?? '').trim();
     const em = String(row.user_email ?? '').trim();
     const senderLabel = dn || em || 'Сообщение';
@@ -368,7 +492,7 @@ router.put('/with/:userId/:messageId', authMiddleware, async (req: AuthRequest, 
         AND to_user_id = $4
       RETURNING id
       `,
-      [text.trim(), messageId, me, other],
+      [encryptMessageText(text.trim()), messageId, me, other],
     );
     if (upd.rowCount === 0) {
       return res.status(404).json({ error: 'Сообщение не найдено или не ваше' });
@@ -378,7 +502,10 @@ router.put('/with/:userId/:messageId', authMiddleware, async (req: AuthRequest, 
       `${directMessageSelectWithView()} WHERE m.id = $3`,
       [me, other, messageId],
     );
-    return res.json(full.rows[0]);
+    const row = full.rows[0] as Record<string, unknown>;
+    (row as any).text = decryptMessageText((row as any).text);
+    (row as any).reply_to_text = decryptMessageText((row as any).reply_to_text);
+    return res.json(row);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
