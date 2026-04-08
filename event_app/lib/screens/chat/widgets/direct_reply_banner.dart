@@ -18,7 +18,7 @@ class DirectReplyBanner extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.transparent,
+        color: Color(0xFF2A2A2A),
         borderRadius: BorderRadius.circular(14),
         child: Container(
           decoration: BoxDecoration(
@@ -37,7 +37,7 @@ class DirectReplyBanner extends StatelessWidget {
                   child: Icon(
                     Icons.reply_rounded,
                     size: 20,
-                    color: scheme.primary,
+                    color: Colors.white,
                   ),
                 ),
                 const SizedBox(width: 10),

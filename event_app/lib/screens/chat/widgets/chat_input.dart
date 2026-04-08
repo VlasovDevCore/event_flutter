@@ -117,7 +117,7 @@ class ChatInput extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: scheme.primary.withValues(alpha: 0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             width: 1.5,
           ),
         ),
@@ -176,7 +176,7 @@ class ChatInput extends StatelessWidget {
               locale: const Locale('ru'),
               checkPlatformCompatibility: true,
               emojiViewConfig: EmojiViewConfig(
-                backgroundColor: chat.inputField,
+                backgroundColor: Color(0xFF2A2A2A),
                 noRecents: Text(
                   'Нет недавних',
                   style: TextStyle(
@@ -189,8 +189,8 @@ class ChatInput extends StatelessWidget {
               categoryViewConfig: CategoryViewConfig(
                 backgroundColor: scheme.surfaceContainerHigh,
                 iconColor: scheme.onSurfaceVariant,
-                iconColorSelected: scheme.primary,
-                indicatorColor: scheme.primary,
+                iconColorSelected: Colors.white,
+                indicatorColor: Colors.white,
                 backspaceColor: scheme.primary,
                 dividerColor: scheme.outline.withValues(alpha: 0.35),
               ),

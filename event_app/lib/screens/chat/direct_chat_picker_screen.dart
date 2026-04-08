@@ -147,34 +147,41 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
   Widget build(BuildContext context) {
     const bg = Color(0xFF161616);
     final topInset = MediaQuery.of(context).padding.top;
-    // Height of header row area (excluding SafeArea top).
-    const headerHeight =
-        37.0 + 8 + 12; // button + top/bottom paddings inside header
+    const headerHeight = 0;
+
     return Scaffold(
       backgroundColor: bg,
       body: Stack(
         children: [
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: RadialGradient(
-                  center: Alignment.topLeft,
-                  radius: 1.2,
-                  colors: [
-                    Colors.white.withValues(alpha: 0.05),
-                    Colors.transparent,
-                  ],
-                  stops: const [0.0, 1.0],
-                ),
-              ),
-            ),
-          ),
-          // Content goes "under" the header overlay.
+          _buildBackgroundGradient(),
+
+          // Контент
           Padding(
             padding: EdgeInsets.only(top: topInset + headerHeight),
             child: _buildBody(),
           ),
-          // Header overlay (position: fixed, transparent).
+
+          // Градиент сверху (под хедером, но заходит в SafeArea)
+          Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 100, // Высота градиента, заходит в SafeArea
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [const Color(0xFF161616), Colors.transparent],
+                    stops: const [0, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // Хедер поверх градиента
           Positioned(
             left: 0,
             right: 0,
@@ -182,6 +189,24 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
             child: SafeArea(bottom: false, child: _buildHeader()),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackgroundGradient() {
+    return Positioned.fill(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: RadialGradient(
+            center: Alignment.topLeft,
+            radius: 0.55,
+            colors: [
+              const Color.fromARGB(197, 29, 29, 29),
+              const Color(0xFF161616),
+            ],
+            stops: const [0.1, 4.9],
+          ),
+        ),
       ),
     );
   }
@@ -289,18 +314,40 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
     }
 
     if (_friends.isEmpty) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.all(24),
-          child: Text(
-            'Нет друзей для переписки.\nДобавьте друзей в разделе «Люди».',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'Inter',
-              color: Color(0xFFB5BBC7),
-              fontSize: 14,
-              height: 1.35,
-            ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset(
+                'assets/events/location-dynamic-color.png',
+                width: 120,
+                height: 120,
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Нет друзей для переписки',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Добавьте друзей в разделе «Люди»',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  color: Color(0xFFB5BBC7),
+                  fontSize: 14,
+                  height: 1.35,
+                ),
+              ),
+            ],
           ),
         ),
       );
@@ -312,10 +359,21 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
       backgroundColor: const Color(0xFF1F1F1F),
       child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-        itemCount: _friends.length,
-        separatorBuilder: (context, _) => const SizedBox(height: 10),
+        itemCount: _friends.length + 1,
+        separatorBuilder: (context, index) {
+          if (index == 0) return const SizedBox.shrink();
+          return const SizedBox(height: 10);
+        },
         itemBuilder: (context, index) {
-          final f = _friends[index];
+          if (index == 0) {
+            return const Opacity(
+              opacity: 0.0,
+              child: _InvisiblePlaceholderCard(),
+            );
+          }
+
+          final friendIndex = index - 1;
+          final f = _friends[friendIndex];
           final email = f['email'] as String? ?? '—';
           final id = f['id'] as String?;
           final username = (f['username'] as String?)?.trim();
@@ -368,6 +426,35 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
   }
 }
 
+// Невидимая карточка-заглушка
+class _InvisiblePlaceholderCard extends StatelessWidget {
+  const _InvisiblePlaceholderCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Container(
+        height: 45,
+        decoration: BoxDecoration(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: ListTile(
+          dense: true,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 15,
+            vertical: 5,
+          ),
+          leading: const SizedBox(width: 50, height: 50),
+          title: const SizedBox.shrink(),
+          subtitle: const SizedBox.shrink(),
+        ),
+      ),
+    );
+  }
+}
+
 class _UnreadTitle extends StatelessWidget {
   const _UnreadTitle({required this.totalUnread});
 
@@ -381,6 +468,7 @@ class _UnreadTitle extends StatelessWidget {
         style: TextStyle(
           fontFamily: 'Inter',
           fontWeight: FontWeight.w600,
+          fontSize: 18,
           color: Colors.white,
         ),
       );
@@ -394,16 +482,8 @@ class _UnreadTitle extends StatelessWidget {
           style: TextStyle(
             fontFamily: 'Inter',
             fontWeight: FontWeight.w600,
+            fontSize: 18,
             color: Colors.white,
-          ),
-        ),
-        Text(
-          'Непрочитанных: $totalUnread',
-          style: TextStyle(
-            fontFamily: 'Inter',
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFFFF5F57),
           ),
         ),
       ],
@@ -430,69 +510,116 @@ class _FriendChatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final trailing = _ChatTrailing(unread: unread);
     return Material(
       color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Ink(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+        borderRadius: BorderRadius.circular(16),
+        splashFactory: NoSplash.splashFactory,
+        highlightColor: Colors.transparent,
+        child: Container(
           decoration: BoxDecoration(
             color: const Color(0xFF141414),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+            borderRadius: BorderRadius.circular(16),
           ),
-          child: Row(
-            children: [
-              _FriendAvatar(avatarUrl: avatarUrl, size: 44),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        if (isMuted) ...[
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.notifications_off_outlined,
-                            size: 16,
-                            color: Colors.white.withValues(alpha: 0.65),
-                          ),
-                        ],
-                      ],
+          child: ListTile(
+            dense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 15,
+              vertical: 5,
+            ),
+            leading: _FriendAvatar(avatarUrl: avatarUrl, size: 50),
+            title: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                      height: 1.2,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        color: Color(0xFFB5BBC7),
-                        fontSize: 12,
+                  ),
+                ),
+                if (isMuted) ...[
+                  const SizedBox(width: 5),
+                  Icon(
+                    Icons.notifications_off_outlined,
+                    size: 14,
+                    color: const Color(0xFFB5BBC7).withOpacity(0.9),
+                  ),
+                ],
+              ],
+            ),
+            subtitle: Text(
+              subtitle,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: Color(0xFFAAABB0),
+                fontSize: 12,
+              ),
+            ),
+            trailing: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(
+                      Icons.chat_bubble_outline,
+                      color: Color(0xFF161616),
+                      size: 18,
+                    ),
+                    onPressed: onTap,
+                  ),
+                ),
+                if (unread > 0)
+                  Positioned(
+                    right: -8,
+                    top: -8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 1,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: const Color(0xFF161616),
+                          width: 1.5,
+                        ),
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 12,
+                        minHeight: 12,
+                      ),
+                      child: Text(
+                        unread > 99 ? '99+' : '$unread',
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
                     ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 10),
-              trailing,
-            ],
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -509,85 +636,47 @@ class _FriendAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final r = BorderRadius.circular(10);
-    if (avatarUrl != null && avatarUrl!.isNotEmpty) {
-      return ClipRRect(
-        borderRadius: r,
-        child: Container(
-          width: size,
-          height: size,
-          color: scheme.surfaceContainerHighest,
-          child: CachedNetworkImage(
-            imageUrl: avatarUrl!,
-            width: size,
-            height: size,
-            fit: BoxFit.cover,
-            placeholder: (context, url) => SizedBox(
-              width: size,
-              height: size,
-              child: Center(
-                child: SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: scheme.primary,
-                  ),
-                ),
-              ),
-            ),
-            errorWidget: (context, url, error) => Center(
-              child: Icon(Icons.person, color: scheme.onSurfaceVariant),
-            ),
-          ),
-        ),
-      );
-    }
     return ClipRRect(
-      borderRadius: r,
+      borderRadius: BorderRadius.circular(12),
       child: Container(
         width: size,
         height: size,
-        color: scheme.surfaceContainerHighest,
-        child: Center(
-          child: Icon(Icons.person, color: scheme.onSurfaceVariant),
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(12),
         ),
+        child: avatarUrl != null && avatarUrl!.isNotEmpty
+            ? CachedNetworkImage(
+                imageUrl: avatarUrl!,
+                width: size,
+                height: size,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
+                    ),
+                  ),
+                ),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(
+                    Icons.person,
+                    color: scheme.onSurfaceVariant,
+                    size: 24,
+                  ),
+                ),
+              )
+            : Center(
+                child: Icon(
+                  Icons.person,
+                  color: scheme.onSurfaceVariant,
+                  size: 24,
+                ),
+              ),
       ),
-    );
-  }
-}
-
-class _ChatTrailing extends StatelessWidget {
-  const _ChatTrailing({required this.unread});
-
-  final int unread;
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = Container(
-      width: 44,
-      height: 44,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      alignment: Alignment.center,
-      child: const Icon(
-        Icons.chat_bubble_outline,
-        color: Colors.black,
-        size: 20,
-      ),
-    );
-    if (unread <= 0) return icon;
-    return Badge(
-      label: Text(
-        unread > 99 ? '99+' : '$unread',
-        style: const TextStyle(
-          fontFamily: 'Inter',
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-      child: icon,
     );
   }
 }

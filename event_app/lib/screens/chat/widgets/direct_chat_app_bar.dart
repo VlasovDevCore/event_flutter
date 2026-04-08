@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 
 import '../../../services/api_client.dart';
+
 /// Шапка личного чата — высота и кнопки как у [ChatAppBar], контент — собеседник.
 class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   const DirectChatAppBar({
@@ -35,9 +36,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
   final String? avatarUrl;
   final String titleLetter;
 
-  static const double _toolbarHeight = 82;
-
-  /// Совпадает с [ChatAppBar.kBarHeight] — отступ ленты под плавающий бар.
+  static const double _toolbarHeight = 80;
   static const double kBarHeight = _toolbarHeight;
 
   String? get _fullAvatarUrl => ApiClient.getFullImageUrl(avatarUrl);
@@ -53,23 +52,16 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     return AppBar(
       toolbarHeight: _toolbarHeight,
       titleSpacing: 0,
-      title: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onOpenProfile,
-          borderRadius: BorderRadius.circular(12),
-          splashColor: scheme.primary.withValues(alpha: 0.12),
-          highlightColor: scheme.primary.withValues(alpha: 0.06),
+      title: GestureDetector(
+        onTap: onOpenProfile,
+        child: Material(
+          color: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.only(right: 4, top: 4, bottom: 4),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(
-                  width: 50,
-                  height: 50,
-                  child: _buildAvatar(context),
-                ),
+                SizedBox(width: 50, height: 50, child: _buildAvatar(context)),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -79,7 +71,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     children: [
                       Row(
                         children: [
-                          Expanded(
+                          Flexible(
                             child: Text(
                               title,
                               style: const TextStyle(
@@ -93,7 +85,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             ),
                           ),
                           if (isMuted) ...[
-                            const SizedBox(width: 6),
+                            const SizedBox(width: 4), // маленький отступ
                             Icon(
                               Icons.notifications_off_outlined,
                               size: 16,
@@ -162,10 +154,13 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
           onToggleBlockUser: onToggleBlockUser,
         ),
       ],
-      leading: _RoundIconButton(
-        icon: Icons.arrow_back_rounded,
-        onPressed: () => Navigator.of(context).maybePop(),
-        alignEnd: false,
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 0, right: 6, top: 18, bottom: 18),
+        child: _RoundIconButton(
+          icon: Icons.arrow_back_rounded,
+          onPressed: () => Navigator.of(context).maybePop(),
+          alignEnd: false,
+        ),
       ),
     );
   }
@@ -178,10 +173,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
         gradient: const LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [
-            Color(0xFF5C6BC0),
-            Color(0xFF3949AB),
-          ],
+          colors: [Color(0xFF5C6BC0), Color(0xFF3949AB)],
         ),
       ),
       child: ClipRRect(
@@ -239,29 +231,31 @@ class _RoundIconButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    Widget btn = Padding(
-      padding: EdgeInsets.only(left: alignEnd ? 0 : 8, right: alignEnd ? 8 : 0),
+
+    Widget btn = SizedBox(
+      width: 40,
+      height: 40,
       child: Material(
         color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           onTap: onPressed,
           borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(
-              icon,
-              color: scheme.onSurface,
-              size: 22,
-            ),
-          ),
+          child: Center(child: Icon(icon, color: scheme.onSurface, size: 22)),
         ),
       ),
     );
+
     if (tooltip != null) {
       btn = Tooltip(message: tooltip!, child: btn);
     }
+
+    if (alignEnd) {
+      btn = Padding(padding: const EdgeInsets.only(right: 8), child: btn);
+    } else {
+      btn = Padding(padding: const EdgeInsets.only(left: 8), child: btn);
+    }
+
     return btn;
   }
 }
@@ -287,81 +281,156 @@ class _MoreMenuButton extends StatelessWidget {
   final VoidCallback onDeleteChat;
   final VoidCallback onToggleBlockUser;
 
-  Future<void> _showNotificationsSheet(BuildContext context) async {
+  void _showMainMenu(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
 
-    await showModalBottomSheet<void>(
+    showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF25262B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
-              title: const Text(
-                'Уведомления',
-                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
-              ),
-            ),
-            if (isMuted) ...[
-              ListTile(
-                leading: Icon(Icons.notifications_active_rounded, color: scheme.primary),
-                title: const Text('Включить уведомления'),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              _MenuItem(
+                icon: isMuted
+                    ? Icons.notifications_off_outlined
+                    : Icons.notifications_outlined,
+                title: 'Уведомления',
+                subtitle: isMuted ? 'Отключены' : null,
                 onTap: () {
                   Navigator.pop(ctx);
-                  onUnmute();
+                  _showNotificationsSheet(context);
                 },
+                iconColor: scheme.primary,
               ),
               Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+              _MenuItem(
+                icon: Icons.person_outline_rounded,
+                title: 'Перейти в профиль',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onOpenProfile();
+                },
+                iconColor: Colors.white,
+              ),
+              if (canClearChat) ...[
+                Divider(
+                  height: 1,
+                  color: scheme.outline.withValues(alpha: 0.2),
+                ),
+                _MenuItem(
+                  icon: Icons.delete_outline_rounded,
+                  title: 'Очистить чат',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onDeleteChat();
+                  },
+                  iconColor: Colors.white,
+                  isDestructive: true,
+                ),
+              ],
+              Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+              _MenuItem(
+                icon: isBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
+                title: isBlocked
+                    ? 'Разблокировать пользователя'
+                    : 'Заблокировать пользователя',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onToggleBlockUser();
+                },
+                iconColor: Colors.white,
+                isDestructive: true,
+              ),
+              const SizedBox(height: 8),
             ],
-            ListTile(
-              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-              title: const Text('Отключить на 1 час'),
-              onTap: () {
-                Navigator.pop(ctx);
-                onMuteFor(const Duration(hours: 1));
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-              title: const Text('Отключить на 8 часов'),
-              onTap: () {
-                Navigator.pop(ctx);
-                onMuteFor(const Duration(hours: 8));
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-              title: const Text('Отключить на 2 дня'),
-              onTap: () {
-                Navigator.pop(ctx);
-                onMuteFor(const Duration(days: 2));
-              },
-            ),
-            ListTile(
-              leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-              title: const Text('Отключить навсегда'),
-              onTap: () {
-                Navigator.pop(ctx);
-                onMuteFor(const Duration(days: 3650));
-              },
-            ),
-            const SizedBox(height: 8),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNotificationsSheet(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              _MenuItem(
+                icon: Icons.notifications_none_rounded,
+                title: 'Уведомления',
+                subtitle: isMuted ? 'Отключены' : null,
+                iconColor: scheme.primary,
+              ),
+              Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+
+              // Опции отключения (без иконок)
+              _MenuItemWithoutIcon(
+                title: 'Отключить на 1 час',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMuteFor(const Duration(hours: 1));
+                },
+              ),
+              _MenuItemWithoutIcon(
+                title: 'Отключить на 8 часов',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMuteFor(const Duration(hours: 8));
+                },
+              ),
+              _MenuItemWithoutIcon(
+                title: 'Отключить на 2 дня',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMuteFor(const Duration(days: 2));
+                },
+              ),
+              _MenuItemWithoutIcon(
+                title: 'Отключить навсегда',
+                onTap: () {
+                  Navigator.pop(ctx);
+                  onMuteFor(const Duration(days: 3650));
+                },
+              ),
+
+              // "Включить уведомления" в самом низу (только если уведомления отключены)
+              if (isMuted) ...[
+                Divider(
+                  height: 1,
+                  color: scheme.outline.withValues(alpha: 0.2),
+                ),
+                _MenuItem(
+                  icon: Icons.notifications_active_rounded,
+                  title: 'Включить уведомления',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    onUnmute();
+                  },
+                  iconColor: Colors.green, // Зелёная иконка
+                ),
+              ],
+              const SizedBox(height: 8),
+            ],
+          ),
         ),
       ),
     );
@@ -378,113 +447,119 @@ class _MoreMenuButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            showModalBottomSheet<void>(
-              context: context,
-              backgroundColor: const Color(0xFF25262B),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              builder: (ctx) => SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const SizedBox(height: 8),
-                    Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ListTile(
-                      leading: Icon(
-                        isMuted
-                            ? Icons.notifications_off_outlined
-                            : Icons.notifications_outlined,
-                        color: scheme.primary,
-                      ),
-                      title: const Text(
-                        'Уведомления',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: isMuted
-                          ? Text(
-                              'Отключены',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: scheme.onSurfaceVariant,
-                                fontSize: 13,
-                              ),
-                            )
-                          : null,
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        _showNotificationsSheet(context);
-                      },
-                    ),
-                    Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
-                    ListTile(
-                      leading: Icon(Icons.person_outline_rounded, color: scheme.primary),
-                      title: const Text(
-                        'Перейти в профиль',
-                        style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        onOpenProfile();
-                      },
-                    ),
-                    Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
-                    if (canClearChat)
-                      ListTile(
-                        leading: Icon(Icons.delete_outline_rounded, color: scheme.error),
-                        title: Text(
-                          'Очистить чат',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w600,
-                            color: scheme.error,
-                          ),
-                        ),
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          onDeleteChat();
-                        },
-                      ),
-                    ListTile(
-                      leading: Icon(
-                        isBlocked ? Icons.lock_open_rounded : Icons.block_rounded,
-                        color: scheme.error,
-                      ),
-                      title: Text(
-                        isBlocked ? 'Разблокировать пользователя' : 'Заблокировать пользователя',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w600,
-                          color: scheme.error,
-                        ),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        onToggleBlockUser();
-                      },
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-            );
-          },
+          onTap: () => _showMainMenu(context),
           child: const SizedBox(
             width: 40,
             height: 40,
-            child: Icon(Icons.more_horiz_rounded, size: 22),
+            child: Center(child: Icon(Icons.more_vert, size: 22)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    required this.iconColor,
+    this.isDestructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final Color iconColor;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.zero,
+        onTap: onTap,
+        splashColor: Colors.white.withValues(alpha: 0.1),
+        highlightColor: Colors.white.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 23, color: iconColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: isDestructive ? Colors.red : Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFFAAABB0),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItemWithoutIcon extends StatelessWidget {
+  const _MenuItemWithoutIcon({required this.title, this.onTap});
+
+  final String title;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.zero,
+        onTap: onTap,
+        splashColor: Colors.white.withValues(alpha: 0.1),
+        highlightColor: Colors.white.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

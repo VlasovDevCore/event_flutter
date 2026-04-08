@@ -12,7 +12,10 @@ class DirectChatInput extends StatelessWidget {
 
   final DirectChatBloc bloc;
 
-  static double overlayReserveHeight(BuildContext context, DirectChatBloc bloc) {
+  static double overlayReserveHeight(
+    BuildContext context,
+    DirectChatBloc bloc,
+  ) {
     final safeBottom = MediaQuery.paddingOf(context).bottom;
     var h = safeBottom + 8 + 10;
     if (bloc.editingMessageId != null) {
@@ -40,8 +43,10 @@ class DirectChatInput extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (bloc.editingMessageId != null) DirectEditingBanner(bloc: bloc),
-                if (bloc.replyingToMessage != null) DirectReplyBanner(bloc: bloc),
+                if (bloc.editingMessageId != null)
+                  DirectEditingBanner(bloc: bloc),
+                if (bloc.replyingToMessage != null)
+                  DirectReplyBanner(bloc: bloc),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -116,7 +121,7 @@ class DirectChatInput extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: scheme.primary.withValues(alpha: 0.85),
+            color: Colors.white.withValues(alpha: 0.85),
             width: 1.5,
           ),
         ),
@@ -173,7 +178,7 @@ class DirectChatInput extends StatelessWidget {
               locale: const Locale('ru'),
               checkPlatformCompatibility: true,
               emojiViewConfig: EmojiViewConfig(
-                backgroundColor: chat.inputField,
+                backgroundColor: Color(0xFF2A2A2A),
                 noRecents: Text(
                   'Нет недавних',
                   style: TextStyle(
@@ -186,8 +191,8 @@ class DirectChatInput extends StatelessWidget {
               categoryViewConfig: CategoryViewConfig(
                 backgroundColor: scheme.surfaceContainerHigh,
                 iconColor: scheme.onSurfaceVariant,
-                iconColorSelected: scheme.primary,
-                indicatorColor: scheme.primary,
+                iconColorSelected: Colors.white,
+                indicatorColor: Colors.white,
                 backspaceColor: scheme.primary,
                 dividerColor: scheme.outline.withValues(alpha: 0.35),
               ),

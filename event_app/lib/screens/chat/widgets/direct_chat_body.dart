@@ -84,9 +84,7 @@ class DirectChatBody extends StatelessWidget {
           decoration: BoxDecoration(
             color: chat.errorBannerBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: scheme.error.withValues(alpha: 0.35),
-            ),
+            border: Border.all(color: scheme.error.withValues(alpha: 0.35)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -122,22 +120,46 @@ class _EmptyDirectChatHint extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final topInset = ChatAppBar.listTopPadding(context);
-    final bottomInset = DirectChatInput.overlayReserveHeight(context, bloc) + 12;
+    final bottomInset =
+        DirectChatInput.overlayReserveHeight(context, bloc) + 12;
 
     return IgnorePointer(
       child: SafeArea(
         child: Padding(
-          padding: EdgeInsets.fromLTRB(24, topInset + 24, 24, bottomInset),
+          padding: EdgeInsets.fromLTRB(24, 0, 24, bottomInset),
           child: Center(
-            child: Text(
-              'Здесь пока нет сообщений.\nНапишите первым.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 14,
-                height: 1.35,
-                color: scheme.onSurfaceVariant,
-              ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/events/chat-bubble-dynamic-color.png',
+                  width: 100,
+                  height: 100,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Здесь пока нет сообщений',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Напишите первым, чтобы начать диалог',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    height: 1.4,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),

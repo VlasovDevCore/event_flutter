@@ -154,18 +154,10 @@ class ChatMessageList extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 14),
           child: Center(
             child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 color: chat.dayPillBg,
                 borderRadius: BorderRadius.circular(999),
-                border: Border.all(color: chat.dayPillBorder),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.2),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
               ),
               child: Text(
                 label,

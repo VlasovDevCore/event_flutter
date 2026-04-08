@@ -442,26 +442,24 @@ class _MyRoomsScreenState extends State<MyRoomsScreen>
                       right: -8,
                       top: -8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 1,
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        constraints: const BoxConstraints(
+                          minWidth: 18,
+                          minHeight: 18,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white, // Белый фон
-                          borderRadius: BorderRadius.circular(12),
+                          color: Colors.white,
+                          shape: BoxShape.circle, // 👈 ИДЕАЛЬНЫЙ КРУГ
                           border: Border.all(
-                            color: const Color(0xFF161616), // Обводка 161616
+                            color: const Color(0xFF161616),
                             width: 1.5,
                           ),
                         ),
-                        constraints: const BoxConstraints(
-                          minWidth: 12,
-                          minHeight: 12,
-                        ),
+                        alignment: Alignment.center,
                         child: Text(
                           unread > 99 ? '99+' : '$unread',
                           style: const TextStyle(
-                            color: Colors.black, // Черный текст
+                            color: Colors.black,
                             fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),

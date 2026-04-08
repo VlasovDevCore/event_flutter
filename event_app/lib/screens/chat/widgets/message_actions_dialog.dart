@@ -47,7 +47,7 @@ class MessageActionsDialog {
                   child: Material(
                     color: const Color(0xFF25262B),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
+                      borderRadius: BorderRadius.circular(14),
                     ),
                     elevation: 10,
                     child: Row(
@@ -58,9 +58,9 @@ class MessageActionsDialog {
                           if (items[i] is PopupMenuItem<String>)
                             Expanded(
                               child: InkWell(
-                                onTap: () => Navigator.of(
-                                  ctx,
-                                ).pop((items[i] as PopupMenuItem<String>).value),
+                                onTap: () => Navigator.of(ctx).pop(
+                                  (items[i] as PopupMenuItem<String>).value,
+                                ),
                                 child: Padding(
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 8,
@@ -105,9 +105,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.copy_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Копировать', style: TextStyle(fontSize: 12)),
+              Text(
+                'Копировать',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -117,9 +121,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.reply_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Ответить', style: TextStyle(fontSize: 12)),
+              Text(
+                'Ответить',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -156,9 +164,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.copy_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Копировать', style: TextStyle(fontSize: 12)),
+              Text(
+                'Копировать',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -169,9 +181,13 @@ class MessageActionsDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+                Icon(Icons.reply_rounded, color: Colors.white, size: 24),
                 const SizedBox(height: 6),
-                const Text('Ответить', style: TextStyle(fontSize: 12)),
+                Text(
+                  'Ответить',
+                  style: const TextStyle(fontSize: 12),
+                  softWrap: false,
+                ),
               ],
             ),
           ),
@@ -183,9 +199,13 @@ class MessageActionsDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.edit_outlined, color: scheme.primary, size: 24),
+                Icon(Icons.edit_outlined, color: Colors.white, size: 24),
                 const SizedBox(height: 6),
-                const Text('Изменить', style: TextStyle(fontSize: 12)),
+                Text(
+                  'Изменить',
+                  style: const TextStyle(fontSize: 12),
+                  softWrap: false,
+                ),
               ],
             ),
           ),
@@ -199,13 +219,17 @@ class MessageActionsDialog {
               children: [
                 Icon(
                   Icons.delete_outline_rounded,
-                  color: scheme.error,
+                  color: const Color(0xFFE34438),
                   size: 24,
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Удалить',
-                  style: TextStyle(color: scheme.error, fontSize: 12),
+                  style: TextStyle(
+                    color: const Color(0xFFE34438),
+                    fontSize: 12,
+                  ),
+                  softWrap: false,
                 ),
               ],
             ),
@@ -253,9 +277,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.copy_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Копировать', style: TextStyle(fontSize: 12)),
+              Text(
+                'Копировать',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -266,9 +294,13 @@ class MessageActionsDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+                Icon(Icons.reply_rounded, color: Colors.white, size: 24),
                 const SizedBox(height: 6),
-                const Text('Ответить', style: TextStyle(fontSize: 12)),
+                Text(
+                  'Ответить',
+                  style: const TextStyle(fontSize: 12),
+                  softWrap: false,
+                ),
               ],
             ),
           ),
@@ -280,9 +312,13 @@ class MessageActionsDialog {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.edit_outlined, color: scheme.primary, size: 24),
+                Icon(Icons.edit_outlined, color: Colors.white, size: 24),
                 const SizedBox(height: 6),
-                const Text('Изменить', style: TextStyle(fontSize: 12)),
+                Text(
+                  'Изменить',
+                  style: const TextStyle(fontSize: 12),
+                  softWrap: false,
+                ),
               ],
             ),
           ),
@@ -296,13 +332,17 @@ class MessageActionsDialog {
               children: [
                 Icon(
                   Icons.delete_outline_rounded,
-                  color: scheme.error,
+                  color: const Color(0xFFE34438),
                   size: 24,
                 ),
                 const SizedBox(height: 6),
                 Text(
                   'Удалить',
-                  style: TextStyle(color: scheme.error, fontSize: 12),
+                  style: TextStyle(
+                    color: const Color(0xFFE34438),
+                    fontSize: 12,
+                  ),
+                  softWrap: false,
                 ),
               ],
             ),
@@ -345,9 +385,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.copy_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.copy_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Копировать', style: TextStyle(fontSize: 12)),
+              Text(
+                'Копировать',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -357,9 +401,13 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.reply_rounded, color: scheme.primary, size: 24),
+              Icon(Icons.reply_rounded, color: Colors.white, size: 24),
               const SizedBox(height: 6),
-              const Text('Ответить', style: TextStyle(fontSize: 12)),
+              Text(
+                'Ответить',
+                style: const TextStyle(fontSize: 12),
+                softWrap: false,
+              ),
             ],
           ),
         ),
@@ -369,11 +417,16 @@ class MessageActionsDialog {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.delete_outline_rounded, color: scheme.error, size: 24),
+              Icon(
+                Icons.delete_outline_rounded,
+                color: const Color(0xFFE34438),
+                size: 24,
+              ),
               const SizedBox(height: 6),
               Text(
                 'Удалить',
-                style: TextStyle(color: scheme.error, fontSize: 12),
+                style: TextStyle(color: const Color(0xFFE34438), fontSize: 12),
+                softWrap: false,
               ),
             ],
           ),
@@ -403,36 +456,76 @@ class MessageActionsDialog {
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: scheme.surfaceContainerHigh,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-        title: Text(
+        backgroundColor: const Color(0xFF161616),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
+        title: const Text(
           'Удалить сообщение?',
           style: TextStyle(
             fontFamily: 'Inter',
-            color: scheme.onSurface,
+            fontSize: 18,
             fontWeight: FontWeight.w600,
+            color: Colors.white,
           ),
         ),
-        content: Text(
+        contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        content: const Text(
           'Это действие нельзя отменить.',
           style: TextStyle(
             fontFamily: 'Inter',
-            color: scheme.onSurfaceVariant,
+            fontSize: 14,
             height: 1.35,
+            color: Color(0xFFAAABB0),
           ),
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Отмена', style: TextStyle(color: scheme.primary)),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+              child: Text(
+                'Удалить',
+                style: TextStyle(
+                  color: const Color(0xFFFC5B4C),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Удалить',
-              style: TextStyle(
-                color: scheme.error,
-                fontWeight: FontWeight.w600,
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              child: const Text(
+                'Отмена',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),

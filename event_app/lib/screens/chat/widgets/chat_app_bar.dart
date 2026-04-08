@@ -8,22 +8,189 @@ import '../../events/event_details_screen.dart';
 import '../../home/widgets/event_preview_participants_row.dart';
 import '../../home/widgets/preview_participant.dart';
 
-class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
+// ============================================================================
+// Вспомогательные виджеты для меню
+// ============================================================================
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.onTap,
+    required this.iconColor,
+    this.isDestructive = false,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final Color iconColor;
+  final bool isDestructive;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.zero,
+        onTap: onTap,
+        splashColor: Colors.white.withValues(alpha: 0.1),
+        highlightColor: Colors.white.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Icon(icon, size: 23, color: iconColor),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: isDestructive ? Colors.red : Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    if (subtitle != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        subtitle!,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: Color(0xFFAAABB0),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MenuItemWithoutIcon extends StatelessWidget {
+  const _MenuItemWithoutIcon({required this.title, this.onTap});
+
+  final String title;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.zero,
+        onTap: onTap,
+        splashColor: Colors.white.withValues(alpha: 0.1),
+        highlightColor: Colors.white.withValues(alpha: 0.05),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontFamily: 'Inter',
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RoundIconButton extends StatelessWidget {
+  const _RoundIconButton({
+    required this.icon,
+    required this.onPressed,
+    this.tooltip,
+    this.alignEnd = false,
+  });
+
+  final IconData icon;
+  final VoidCallback onPressed;
+  final String? tooltip;
+  final bool alignEnd;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    Widget btn = SizedBox(
+      width: 40,
+      height: 40,
+      child: Material(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(12),
+          child: Center(child: Icon(icon, color: scheme.onSurface, size: 22)),
+        ),
+      ),
+    );
+
+    if (tooltip != null) {
+      btn = Tooltip(message: tooltip!, child: btn);
+    }
+
+    if (alignEnd) {
+      btn = Padding(padding: const EdgeInsets.only(right: 8), child: btn);
+    } else {
+      btn = Padding(padding: const EdgeInsets.only(left: 8), child: btn);
+    }
+
+    return btn;
+  }
+}
+
+// ============================================================================
+// ChatAppBar
+// ============================================================================
+
+class ChatAppBar extends StatefulWidget implements PreferredSizeWidget {
   const ChatAppBar({super.key, required this.event});
 
   final Event event;
 
-  static const double _toolbarHeight = 82;
-
-  /// Высота полосы контента app bar (без статус-бара). Для отступа ленты под «плавающий» бар.
-  static const double kBarHeight = _toolbarHeight;
-
-  /// Меньше суммарного отступа ленты: пузыри ближе к шапке; стык перекрывает градиент под app bar.
+  static const double _toolbarHeight = 80;
+  static const double kBarHeight = 10;
   static const double kListTopInsetTighten = 20;
 
-  /// Верхний inset ленты сообщений (safe area + бар − [kListTopInsetTighten]).
   static double listTopPadding(BuildContext context) =>
       MediaQuery.paddingOf(context).top + kBarHeight - kListTopInsetTighten;
+
+  @override
+  State<ChatAppBar> createState() => _ChatAppBarState();
+
+  @override
+  Size get preferredSize => const Size.fromHeight(_toolbarHeight);
+}
+
+class _ChatAppBarState extends State<ChatAppBar> {
+  bool _isMuted = false;
+  static const double _toolbarHeight = 80;
 
   static String _formatEventDateTimeLabel(DateTime dt) {
     final local = dt.toLocal();
@@ -61,24 +228,20 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
     return event.goingUsers
         .map(
-          (email) => PreviewParticipant(
-            label: email,
-            avatarUrl: null,
-            status: 1,
-          ),
+          (email) =>
+              PreviewParticipant(label: email, avatarUrl: null, status: 1),
         )
         .toList();
   }
 
-  static bool _isLoggedIn() =>
-      Hive.box('authBox').get('token') != null;
+  static bool _isLoggedIn() => Hive.box('authBox').get('token') != null;
 
-  /// Есть ли у пользователя статус «приду» (можно снять участие).
   static bool _canLeaveEvent(Event event) {
     if (!_isLoggedIn()) return false;
     if (event.rsvpStatus == 1) return true;
-    final myEmail =
-        Hive.box('authBox').get('email')?.toString().trim().toLowerCase();
+    final myEmail = Hive.box(
+      'authBox',
+    ).get('email')?.toString().trim().toLowerCase();
     if (myEmail != null &&
         myEmail.isNotEmpty &&
         event.goingUsers.any((e) => e.toLowerCase() == myEmail)) {
@@ -95,9 +258,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   static void _openEventDetails(BuildContext context, Event event) {
     Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(
-        builder: (_) => EventDetailsScreen(event: event),
-      ),
+      MaterialPageRoute<void>(builder: (_) => EventDetailsScreen(event: event)),
     );
   }
 
@@ -123,9 +284,9 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       }
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
       }
     }
   }
@@ -171,95 +332,75 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     }
   }
 
-  static void _showInfoSheet(BuildContext context, Event event) {
+  void _showInfoSheet(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final canLeave = _canLeaveEvent(event);
+    final canLeave = _canLeaveEvent(widget.event);
 
     showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF25262B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 8),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.18),
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
-              title: const Text(
-                'Уведомления',
-                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showNotificationsSheet(context, event);
-              },
-            ),
-            Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
-            ListTile(
-              leading: Icon(Icons.event_rounded, color: scheme.primary),
-              title: const Text(
-                'Подробности события',
-                style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
-              ),
-              subtitle: Text(
-                event.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  color: scheme.onSurfaceVariant,
-                  fontSize: 13,
-                ),
-              ),
-              onTap: () {
-                Navigator.pop(ctx);
-                _openEventDetails(context, event);
-              },
-            ),
-            if (canLeave) ...[
-              Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
-              ListTile(
-                leading: Icon(Icons.logout_rounded, color: scheme.error),
-                title: Text(
-                  'Выйти из события',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w600,
-                    color: scheme.error,
-                  ),
-                ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
+      builder: (ctx) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.black,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(height: 12),
+              _MenuItem(
+                icon: Icons.notifications_none_rounded,
+                title: 'Уведомления',
                 onTap: () {
                   Navigator.pop(ctx);
-                  _showLeaveConfirm(context, event);
+                  _showNotificationsSheet(context);
                 },
+                iconColor: Colors.white,
               ),
+              Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+              _MenuItem(
+                icon: Icons.event_rounded,
+                title: 'Подробности события',
+                subtitle: widget.event.title,
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _openEventDetails(context, widget.event);
+                },
+                iconColor: scheme.primary,
+              ),
+              if (canLeave) ...[
+                Divider(
+                  height: 1,
+                  color: scheme.outline.withValues(alpha: 0.2),
+                ),
+                _MenuItem(
+                  icon: Icons.logout_rounded,
+                  title: 'Выйти из события',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showLeaveConfirm(context, widget.event);
+                  },
+                  iconColor: Colors.white,
+                  isDestructive: true,
+                ),
+              ],
+              const SizedBox(height: 8),
             ],
-            const SizedBox(height: 8),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  static Future<void> _showNotificationsSheet(BuildContext context, Event event) async {
+  Future<void> _showNotificationsSheet(BuildContext context) async {
     final scheme = Theme.of(context).colorScheme;
 
     Future<DateTime?> loadMutedUntil() async {
       try {
         final data = await ApiClient.instance.get(
-          '/events/${event.id}/mute',
+          '/events/${widget.event.id}/mute',
           withAuth: true,
         );
         final raw = data['muted_until'];
@@ -272,115 +413,116 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
     Future<void> setMuteUntil(DateTime? untilUtc) async {
       await ApiClient.instance.post(
-        '/events/${event.id}/mute',
+        '/events/${widget.event.id}/mute',
         withAuth: true,
         body: {'muted_until': untilUtc?.toIso8601String()},
       );
+      if (untilUtc == null) {
+        setState(() => _isMuted = false);
+      } else {
+        setState(() => _isMuted = untilUtc.isAfter(DateTime.now()));
+      }
     }
 
     DateTime? mutedUntil = await loadMutedUntil();
-    bool isMutedNow() => mutedUntil != null && mutedUntil!.isAfter(DateTime.now());
+    bool isMutedNow() =>
+        mutedUntil != null && mutedUntil!.isAfter(DateTime.now());
+
+    if (mounted) {
+      setState(() => _isMuted = isMutedNow());
+    }
 
     if (!context.mounted) return;
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: const Color(0xFF25262B),
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: false,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setState) {
+        builder: (ctx, setStateSheet) {
           final muted = isMutedNow();
-          return SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const SizedBox(height: 8),
-                Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(2),
+          return Container(
+            decoration: const BoxDecoration(
+              color: Colors.black,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(15)),
+            ),
+            child: SafeArea(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  _MenuItem(
+                    icon: Icons.notifications_none_rounded,
+                    title: 'Уведомления',
+                    subtitle: muted ? 'Отключены' : null,
+                    iconColor: scheme.primary,
                   ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: Icon(Icons.notifications_none_rounded, color: scheme.primary),
-                  title: const Text(
-                    'Уведомления',
-                    style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
+                  Divider(
+                    height: 1,
+                    color: scheme.outline.withValues(alpha: 0.2),
                   ),
-                  subtitle: muted
-                      ? Text(
-                          'Отключены',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: scheme.onSurfaceVariant,
-                            fontSize: 13,
-                          ),
-                        )
-                      : null,
-                ),
-                if (muted) ...[
-                  ListTile(
-                    leading: Icon(Icons.notifications_active_rounded, color: scheme.primary),
-                    title: const Text('Включить уведомления'),
+                  _MenuItemWithoutIcon(
+                    title: 'Отключить на 1 час',
                     onTap: () async {
-                      await setMuteUntil(null);
-                      mutedUntil = null;
-                      if (ctx.mounted) setState(() {});
+                      final until = DateTime.now()
+                          .add(const Duration(hours: 1))
+                          .toUtc();
+                      await setMuteUntil(until);
+                      if (ctx.mounted) setStateSheet(() {});
                       if (context.mounted) Navigator.pop(ctx);
                     },
                   ),
-                  Divider(height: 1, color: scheme.outline.withValues(alpha: 0.2)),
+                  _MenuItemWithoutIcon(
+                    title: 'Отключить на 8 часов',
+                    onTap: () async {
+                      final until = DateTime.now()
+                          .add(const Duration(hours: 8))
+                          .toUtc();
+                      await setMuteUntil(until);
+                      if (ctx.mounted) setStateSheet(() {});
+                      if (context.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                  _MenuItemWithoutIcon(
+                    title: 'Отключить на 2 дня',
+                    onTap: () async {
+                      final until = DateTime.now()
+                          .add(const Duration(days: 2))
+                          .toUtc();
+                      await setMuteUntil(until);
+                      if (ctx.mounted) setStateSheet(() {});
+                      if (context.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                  _MenuItemWithoutIcon(
+                    title: 'Отключить навсегда',
+                    onTap: () async {
+                      final until = DateTime.now()
+                          .add(const Duration(days: 3650))
+                          .toUtc();
+                      await setMuteUntil(until);
+                      if (ctx.mounted) setStateSheet(() {});
+                      if (context.mounted) Navigator.pop(ctx);
+                    },
+                  ),
+                  if (muted) ...[
+                    Divider(
+                      height: 1,
+                      color: scheme.outline.withValues(alpha: 0.2),
+                    ),
+                    _MenuItem(
+                      icon: Icons.notifications_active_rounded,
+                      title: 'Включить уведомления',
+                      onTap: () async {
+                        await setMuteUntil(null);
+                        if (ctx.mounted) setStateSheet(() {});
+                        if (context.mounted) Navigator.pop(ctx);
+                      },
+                      iconColor: Colors.lightGreen,
+                    ),
+                  ],
+                  const SizedBox(height: 8),
                 ],
-                ListTile(
-                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-                  title: const Text('Отключить на 1 час'),
-                  onTap: () async {
-                    final until = DateTime.now().add(const Duration(hours: 1)).toUtc();
-                    await setMuteUntil(until);
-                    mutedUntil = until.toLocal();
-                    if (ctx.mounted) setState(() {});
-                    if (context.mounted) Navigator.pop(ctx);
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-                  title: const Text('Отключить на 8 часов'),
-                  onTap: () async {
-                    final until = DateTime.now().add(const Duration(hours: 8)).toUtc();
-                    await setMuteUntil(until);
-                    mutedUntil = until.toLocal();
-                    if (ctx.mounted) setState(() {});
-                    if (context.mounted) Navigator.pop(ctx);
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-                  title: const Text('Отключить на 2 дня'),
-                  onTap: () async {
-                    final until = DateTime.now().add(const Duration(days: 2)).toUtc();
-                    await setMuteUntil(until);
-                    mutedUntil = until.toLocal();
-                    if (ctx.mounted) setState(() {});
-                    if (context.mounted) Navigator.pop(ctx);
-                  },
-                ),
-                ListTile(
-                  leading: Icon(Icons.notifications_off_outlined, color: scheme.onSurfaceVariant),
-                  title: const Text('Отключить навсегда'),
-                  onTap: () async {
-                    final until = DateTime.now().add(const Duration(days: 3650)).toUtc();
-                    await setMuteUntil(until);
-                    mutedUntil = until.toLocal();
-                    if (ctx.mounted) setState(() {});
-                    if (context.mounted) Navigator.pop(ctx);
-                  },
-                ),
-                const SizedBox(height: 8),
-              ],
+              ),
             ),
           );
         },
@@ -388,33 +530,58 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
     );
   }
 
+  Future<void> _loadMuteStatus() async {
+    try {
+      final data = await ApiClient.instance.get(
+        '/events/${widget.event.id}/mute',
+        withAuth: true,
+      );
+      final raw = data['muted_until'];
+      if (raw is String && raw.trim().isNotEmpty) {
+        final until = DateTime.tryParse(raw)?.toLocal();
+        if (mounted) {
+          setState(() {
+            _isMuted = until != null && until.isAfter(DateTime.now());
+          });
+        }
+      } else {
+        if (mounted) setState(() => _isMuted = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isMuted = false);
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMuteStatus();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     const subtitleColor = Color(0xFFB5BBC7);
 
-    final date = event.endsAt ?? event.createdAt;
-    final participants = _participantsFromEvent(event);
-    final totalGoing = event.goingUsers.length;
+    final date = widget.event.endsAt ?? widget.event.createdAt;
+    final participants = _participantsFromEvent(widget.event);
+    final totalGoing = widget.event.goingUsers.length;
 
-    final color = Color(event.markerColorValue);
+    final color = Color(widget.event.markerColorValue);
     final gradientStart = Color.lerp(color, Colors.white, 0.22) ?? color;
     final gradientEnd = Color.lerp(color, Colors.black, 0.22) ?? color;
     final iconData = IconData(
-      event.markerIconCodePoint,
+      widget.event.markerIconCodePoint,
       fontFamily: 'MaterialIcons',
     );
 
     return AppBar(
       toolbarHeight: _toolbarHeight,
       titleSpacing: 0,
-      title: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: () => _openEventDetails(context, event),
-          borderRadius: BorderRadius.circular(12),
-          splashColor: scheme.primary.withValues(alpha: 0.12),
-          highlightColor: scheme.primary.withValues(alpha: 0.06),
+      title: GestureDetector(
+        onTap: () => _openEventDetails(context, widget.event),
+        child: Material(
+          color: Colors.transparent,
           child: Padding(
             padding: const EdgeInsets.only(right: 4, top: 4, bottom: 4),
             child: Row(
@@ -433,11 +600,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Center(
-                      child: Icon(
-                        iconData,
-                        size: 20,
-                        color: Colors.white,
-                      ),
+                      child: Icon(iconData, size: 20, color: Colors.white),
                     ),
                   ),
                 ),
@@ -448,16 +611,30 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        event.title,
-                        style: const TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          height: 1.2,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              widget.event.title,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                                height: 1.2,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          if (_isMuted) ...[
+                            const SizedBox(width: 6),
+                            Icon(
+                              Icons.notifications_off_outlined,
+                              size: 17,
+                              color: const Color(0xFFB5BBC7).withOpacity(0.9),
+                            ),
+                          ],
+                        ],
                       ),
                       const SizedBox(height: 4),
                       Row(
@@ -477,8 +654,7 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                                 color: Color(0xFFAAABB0),
                                 fontSize: 12,
                               ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                              softWrap: false,
                             ),
                           ),
                           const SizedBox(width: 8),
@@ -491,16 +667,11 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             ),
                           ),
                           const SizedBox(width: 8),
-                          Expanded(
-                            child: Align(
-                              alignment: Alignment.centerRight,
-                              child: EventPreviewParticipantsRow(
-                                participants: participants,
-                                totalGoing: totalGoing,
-                                previewLoading: false,
-                                color: const Color(0xFF8FF5FF),
-                              ),
-                            ),
+                          EventPreviewParticipantsRow(
+                            participants: participants,
+                            totalGoing: totalGoing,
+                            previewLoading: false,
+                            color: Colors.white,
                           ),
                         ],
                       ),
@@ -521,63 +692,19 @@ class ChatAppBar extends StatelessWidget implements PreferredSizeWidget {
       centerTitle: false,
       actions: [
         _RoundIconButton(
-          icon: Icons.info_outline_rounded,
-          onPressed: () => _showInfoSheet(context, event),
-          tooltip: 'О событии',
+          icon: Icons.more_vert,
+          onPressed: () => _showInfoSheet(context),
           alignEnd: true,
         ),
       ],
-      leading: _RoundIconButton(
-        icon: Icons.arrow_back_rounded,
-        onPressed: () => Navigator.of(context).maybePop(),
-        alignEnd: false,
-      ),
-    );
-  }
-
-  @override
-  Size get preferredSize => const Size.fromHeight(_toolbarHeight);
-}
-
-class _RoundIconButton extends StatelessWidget {
-  const _RoundIconButton({
-    required this.icon,
-    required this.onPressed,
-    this.tooltip,
-    this.alignEnd = false,
-  });
-
-  final IconData icon;
-  final VoidCallback onPressed;
-  final String? tooltip;
-  final bool alignEnd;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    Widget btn = Padding(
-      padding: EdgeInsets.only(left: alignEnd ? 0 : 8, right: alignEnd ? 8 : 0),
-      child: Material(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.65),
-        borderRadius: BorderRadius.circular(12),
-        child: InkWell(
-          onTap: onPressed,
-          borderRadius: BorderRadius.circular(12),
-          child: SizedBox(
-            width: 40,
-            height: 40,
-            child: Icon(
-              icon,
-              color: scheme.onSurface,
-              size: 22,
-            ),
-          ),
+      leading: Padding(
+        padding: const EdgeInsets.only(left: 0, right: 6, top: 18, bottom: 18),
+        child: _RoundIconButton(
+          icon: Icons.arrow_back_rounded,
+          onPressed: () => Navigator.of(context).maybePop(),
+          alignEnd: false,
         ),
       ),
     );
-    if (tooltip != null) {
-      btn = Tooltip(message: tooltip!, child: btn);
-    }
-    return btn;
   }
 }

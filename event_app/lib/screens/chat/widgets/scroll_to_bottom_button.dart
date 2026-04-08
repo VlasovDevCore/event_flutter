@@ -75,17 +75,21 @@ class ScrollToBottomButton extends StatelessWidget {
 
   Widget _buildBadge(BuildContext context) {
     final count = bloc.pendingNewMessagesCount;
+    final text = count > 99 ? '99+' : '$count';
+
+    // Рассчитываем ширину в зависимости от текста
+    final isTwoDigits = text.length >= 2;
+    final width = isTwoDigits ? 24.0 : 20.0;
 
     return Positioned(
       right: -4,
       top: -6,
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-        constraints: const BoxConstraints(minWidth: 20, minHeight: 18),
+        width: width, // фиксированная ширина
+        height: 20, // фиксированная высота
         decoration: BoxDecoration(
-          color: Colors.white, // Белый фон
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: Colors.white, width: 1.5),
+          color: Colors.white,
+          shape: BoxShape.circle, // 👈 ИДЕАЛЬНЫЙ КРУГ
           boxShadow: [
             BoxShadow(
               color: Colors.black.withValues(alpha: 0.1),
@@ -96,12 +100,12 @@ class ScrollToBottomButton extends StatelessWidget {
         ),
         alignment: Alignment.center,
         child: Text(
-          count > 99 ? '99+' : '$count',
+          text,
           style: const TextStyle(
             fontFamily: 'Inter',
             fontSize: 10,
             fontWeight: FontWeight.w700,
-            color: Colors.black, // Черный текст
+            color: Colors.black,
             height: 1.1,
           ),
         ),

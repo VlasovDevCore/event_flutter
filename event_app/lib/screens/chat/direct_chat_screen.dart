@@ -134,33 +134,81 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     }
   }
 
-  Future<void> _confirmAndDeleteChat() async {
+  Future<void> _confirmAndClearChat() async {
     final scheme = Theme.of(context).colorScheme;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: scheme.surfaceContainerHigh,
+        backgroundColor: const Color(0xFF161616),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 8),
         title: const Text(
-          'Удалить чат?',
-          style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
-        ),
-        content: const Text(
-          'Будет удалена история переписки. Действие нельзя отменить.',
-          style: TextStyle(fontFamily: 'Inter', height: 1.35),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Отмена', style: TextStyle(color: scheme.primary)),
+          'Очистить чат?',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: Text(
-              'Удалить',
-              style: TextStyle(
-                color: scheme.error,
-                fontWeight: FontWeight.w600,
+        ),
+        contentPadding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        content: const Text(
+          'Вся история переписки будет удалена. Действие нельзя отменить.',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 14,
+            height: 1.35,
+            color: Color(0xFFAAABB0),
+          ),
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+              child: Text(
+                'Очистить',
+                style: TextStyle(
+                  color: const Color(0xFFFC5B4C),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.transparent,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+              ),
+              child: Text(
+                'Отмена',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
               ),
             ),
           ),
@@ -175,12 +223,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         withAuth: true,
       );
       if (!mounted) return;
-      _showToast('Чат удалён');
       _bloc.clearConversationLocal();
     } on ApiException catch (e) {
-      _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
     } catch (_) {
-      _showToast('Не удалось удалить чат');
+      _showToast('Не удалось очистить чат');
     }
   }
 
@@ -193,7 +239,9 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         backgroundColor: scheme.surfaceContainerHigh,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text(
-          willBlock ? 'Заблокировать пользователя?' : 'Разблокировать пользователя?',
+          willBlock
+              ? 'Заблокировать пользователя?'
+              : 'Разблокировать пользователя?',
           style: TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w600),
         ),
         content: Text(
@@ -238,16 +286,20 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       }
       if (!mounted) return;
       setState(() => _isBlocked = willBlock);
-      _showToast(willBlock ? 'Пользователь заблокирован' : 'Пользователь разблокирован');
+      _showToast(
+        willBlock ? 'Пользователь заблокирован' : 'Пользователь разблокирован',
+      );
       if (willBlock) {
         Navigator.of(context).maybePop();
       }
     } on ApiException catch (e) {
       _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
     } catch (_) {
-      _showToast(willBlock
-          ? 'Не удалось заблокировать пользователя'
-          : 'Не удалось разблокировать пользователя');
+      _showToast(
+        willBlock
+            ? 'Не удалось заблокировать пользователя'
+            : 'Не удалось разблокировать пользователя',
+      );
     }
   }
 
@@ -372,7 +424,7 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                 ),
               );
             },
-            onDeleteChat: _confirmAndDeleteChat,
+            onDeleteChat: _confirmAndClearChat,
             onToggleBlockUser: _confirmAndToggleBlockUser,
           ),
           body: GestureDetector(

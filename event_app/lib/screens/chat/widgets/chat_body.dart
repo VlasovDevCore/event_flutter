@@ -56,8 +56,16 @@ class ChatBody extends StatelessWidget {
           );
         }
 
+        // Показываем пустой хинт, если нет сообщений
+        if (bloc.messages.isEmpty) {
+          return Container(
+            color: const Color(0xFF161616),
+            child: _buildEmptyChatHint(context),
+          );
+        }
+
         return Container(
-          color: const Color(0xFF161616),  // ← сплошной цвет
+          color: const Color(0xFF161616),
           child: Stack(
             children: [
               ChatMessageList(bloc: bloc),
@@ -81,9 +89,7 @@ class ChatBody extends StatelessWidget {
           decoration: BoxDecoration(
             color: chat.errorBannerBg,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: scheme.error.withValues(alpha: 0.35),
-            ),
+            border: Border.all(color: scheme.error.withValues(alpha: 0.35)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
@@ -103,6 +109,54 @@ class ChatBody extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyChatHint(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final topInset = ChatAppBar.listTopPadding(context);
+
+    return IgnorePointer(
+      child: SafeArea(
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(24, 0, 24, 70),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Image.asset(
+                  'assets/events/chat-bubble-dynamic-color.png',
+                  width: 100,
+                  height: 100,
+                ),
+                const SizedBox(height: 24),
+                Text(
+                  'Здесь пока нет сообщений',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.3,
+                    color: scheme.onSurface,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Напишите первым, чтобы начать диалог',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 14,
+                    height: 1.4,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
