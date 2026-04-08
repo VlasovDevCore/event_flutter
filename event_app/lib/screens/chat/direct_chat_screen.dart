@@ -8,6 +8,7 @@ import '../../services/chat_presence_tracker.dart';
 import '../profile/profile_avatar.dart';
 import '../profile/profile_screen.dart';
 import '../profile/profile_repository.dart';
+import '../../widgets/profile/blocked_card.dart';
 import 'bloc/direct_chat_bloc.dart';
 import 'chat_appearance.dart';
 import 'widgets/direct_chat_app_bar.dart';
@@ -20,10 +21,16 @@ class DirectChatScreen extends StatefulWidget {
     super.key,
     required this.userId,
     required this.title,
+    this.initialIsBlocked,
+    this.initialIsBlockedBy,
+    this.initialCanWrite,
   });
 
   final String userId;
   final String title;
+  final bool? initialIsBlocked;
+  final bool? initialIsBlockedBy;
+  final bool? initialCanWrite;
 
   @override
   State<DirectChatScreen> createState() => _DirectChatScreenState();
@@ -35,8 +42,12 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
   String? _peerHeaderName;
   String? _peerAvatarResolved;
   String? _peerUsername;
+  bool _peerAllowMessagesFromNonFriends = true;
+  bool _isFriends = false;
+  bool? _canWriteKnown;
   DateTime? _mutedUntil;
   bool _isBlocked = false;
+  bool _isBlockedBy = false;
 
   String get _titleForAppBar {
     final n = _peerHeaderName?.trim();
@@ -61,10 +72,46 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     _bloc.onShowMyMessageActions = _showMyMessageActions;
     _bloc.onShowCopyMenu = _showCopyMenu;
     _bloc.onShowError = _showToast;
+
+    // Чтобы не было "мигания": если статус блокировки уже известен из списка,
+    // применяем его до первого кадра.
+    final initBlocked = widget.initialIsBlocked == true;
+    final initBlockedBy = widget.initialIsBlockedBy == true;
+    if (initBlocked || initBlockedBy) {
+      _isBlocked = initBlocked;
+      _isBlockedBy = initBlockedBy;
+      _bloc.setMessageActionsEnabled(false);
+    }
+    _canWriteKnown = (initBlocked || initBlockedBy)
+        ? false
+        : widget.initialCanWrite;
+
     unawaited(_bloc.init());
     _loadPeerProfile();
+    _loadRelationship();
     _loadMuteStatus();
     _loadBlockStatus();
+  }
+
+  bool get _canWriteToPeer {
+    if (_isBlocked || _isBlockedBy) return false;
+    return _isFriends || _peerAllowMessagesFromNonFriends;
+  }
+
+  void _syncMessageActionsEnabled() {
+    _bloc.setMessageActionsEnabled(_canWriteKnown == true);
+  }
+
+  Future<void> _loadRelationship() async {
+    try {
+      final rel = await ProfileRepository.fetchRelationship(widget.userId);
+      if (!mounted) return;
+      setState(() {
+        _isFriends = rel.isFriends;
+        _canWriteKnown = _canWriteToPeer;
+      });
+      _syncMessageActionsEnabled();
+    } catch (_) {}
   }
 
   bool get _isMutedNow {
@@ -93,7 +140,12 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
     try {
       final status = await ProfileRepository.fetchBlockStatus(widget.userId);
       if (!mounted) return;
-      setState(() => _isBlocked = status.isBlocked);
+      setState(() {
+        _isBlocked = status.isBlocked;
+        _isBlockedBy = status.isBlockedBy;
+        _canWriteKnown = _canWriteToPeer;
+      });
+      _syncMessageActionsEnabled();
     } catch (_) {}
   }
 
@@ -312,6 +364,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
       final email = data['email']?.toString().trim();
       final username = data['username']?.toString().trim();
       final rawAvatar = (data['avatar_url'] ?? data['avatarUrl'])?.toString();
+      final allowNonFriends = data['allow_messages_from_non_friends'] ??
+          data['allowMessagesFromNonFriends'];
+      final allow =
+          allowNonFriends is bool ? allowNonFriends : true;
 
       String? headerName;
       if (displayName != null && displayName.isNotEmpty) {
@@ -327,7 +383,10 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         _peerHeaderName = headerName;
         _peerUsername = username;
         _peerAvatarResolved = resolveAvatarUrl(rawAvatar);
+        _peerAllowMessagesFromNonFriends = allow;
+        _canWriteKnown = _canWriteToPeer;
       });
+      _syncMessageActionsEnabled();
       _bloc.setPeerProfile(
         displayName: headerName,
         email: email,
@@ -402,6 +461,8 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         final subtitle = (_peerUsername != null && _peerUsername!.isNotEmpty)
             ? '@${_peerUsername!}'
             : null;
+        final blockedView = _isBlocked || _isBlockedBy;
+        final canWriteResolved = _canWriteKnown ?? true;
 
         return Scaffold(
           backgroundColor: chat.scaffold,
@@ -467,7 +528,57 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: DirectChatInput(bloc: _bloc),
+                  child: (canWriteResolved == true)
+                      ? DirectChatInput(bloc: _bloc)
+                      : SafeArea(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                            child: blockedView
+                                ? BlockedCard(
+                                    isBlocked: _isBlocked,
+                                    isBlockedBy: _isBlockedBy,
+                                  )
+                                : Card(
+                                    elevation: 0,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .surfaceContainerHighest,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Image.asset(
+                                            'assets/friends/lock-dynamic-color.png',
+                                            width: 34,
+                                            height: 34,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          const Flexible(
+                                            child: Text(
+                                              'Пользователь не принимает сообщения от не друзей',
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
                 ),
               ],
             ),

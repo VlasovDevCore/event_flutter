@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
 import '../../utils/formatters.dart';
+import '../../widgets/profile/blocked_card.dart';
 import '../../widgets/profile/relationship_buttons.dart';
 import '../../widgets/profile/stat_badge.dart';
 import '../../widgets/profile/stat_card.dart';
@@ -365,6 +366,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ? '@${profile.username}'
         : (profile.email ?? '—');
     final avatarUrl = profile.resolvedAvatarUrl();
+    final isBlockedView = !isMe &&
+        blockStatus != null &&
+        (blockStatus.isBlocked || blockStatus.isBlockedBy);
 
     return ListView(
       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -471,15 +475,29 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ],
           ),
         ),
-        const SizedBox(height: 16),
-        _buildBioSection(profile, isMe),
-        const SizedBox(height: 16),
-        _buildStatsCards(stats, isLoadingStats),
-        const SizedBox(height: 16),
-        _buildAchievementsSection(achievements, isLoadingAchievements, isMe),
-        const SizedBox(height: 16),
-        _buildTenureLine(profile.createdAt, isMe),
-        const SizedBox(height: 16),
+        if (isBlockedView) ...[
+          const SizedBox(height: 16),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: BlockedCard(
+              isBlocked: blockStatus?.isBlocked ?? false,
+              isBlockedBy: blockStatus?.isBlockedBy ?? false,
+            ),
+          ),
+          const SizedBox(height: 16),
+        ] else ...[
+          const SizedBox(height: 16),
+          _buildBioSection(profile, isMe),
+          const SizedBox(height: 16),
+          _buildStatsCards(stats, isLoadingStats),
+          const SizedBox(height: 16),
+          _buildAchievementsSection(achievements, isLoadingAchievements, isMe),
+        ],
+        if (!isBlockedView) ...[
+          const SizedBox(height: 16),
+          _buildTenureLine(profile.createdAt, isMe),
+          const SizedBox(height: 16),
+        ],
       ],
     );
   }

@@ -173,6 +173,72 @@ router.get('/unread-by-peer', authMiddleware, async (req: AuthRequest, res) => {
   }
 });
 
+/**
+ * Список пользователей, с кем уже есть начатый личный чат (хотя бы одно сообщение).
+ * Нужен для того, чтобы диалог не пропадал из списка после отписки/потери дружбы.
+ */
+router.get('/peers', authMiddleware, async (req: AuthRequest, res) => {
+  const me = req.user?.id;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      WITH convo AS (
+        SELECT
+          CASE
+            WHEN m.from_user_id = $1 THEN m.to_user_id
+            ELSE m.from_user_id
+          END AS peer_id,
+          MAX(m.created_at) AS last_message_at
+        FROM direct_messages m
+        WHERE m.from_user_id = $1 OR m.to_user_id = $1
+        GROUP BY peer_id
+      )
+      SELECT
+        u.id,
+        u.email,
+        COALESCE(u.username, '') AS username,
+        COALESCE(u.display_name, '') AS display_name,
+        u.avatar_url,
+        u.allow_messages_from_non_friends,
+        c.last_message_at,
+        EXISTS (
+          SELECT 1 FROM user_blocks b
+          WHERE b.blocker_user_id = $1 AND b.blocked_user_id = u.id
+        ) AS is_blocked,
+        EXISTS (
+          SELECT 1 FROM user_blocks b
+          WHERE b.blocker_user_id = u.id AND b.blocked_user_id = $1
+        ) AS is_blocked_by,
+        (
+          EXISTS (
+            SELECT 1 FROM friend_requests fr
+            WHERE fr.from_user_id = $1 AND fr.to_user_id = u.id AND fr.status = 'accepted'
+          )
+          AND EXISTS (
+            SELECT 1 FROM friend_requests fr
+            WHERE fr.from_user_id = u.id AND fr.to_user_id = $1 AND fr.status = 'accepted'
+          )
+        ) AS is_friends
+      FROM convo c
+      JOIN users u ON u.id = c.peer_id
+      WHERE u.id <> $1
+      ORDER BY c.last_message_at DESC
+      `,
+      [me],
+    );
+    return res.json(r.rows);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 // Получить историю ЛС с пользователем
 router.get('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
   const me = req.user?.id;
@@ -182,9 +248,6 @@ router.get('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
 
   const client = await pool.connect();
   try {
-    if (await isBlockedEitherWay(client, me, other)) {
-      return res.status(403).json({ error: 'Чат недоступен: блокировка' });
-    }
     const isFriends = await areFriends(client, me, other);
     const settings = await client.query(
       `SELECT allow_messages_from_non_friends FROM users WHERE id = $1`,
@@ -194,7 +257,20 @@ router.get('/with/:userId', authMiddleware, async (req: AuthRequest, res) => {
     const allowNonFriends = Boolean(settings.rows[0].allow_messages_from_non_friends);
 
     if (!isFriends && !allowNonFriends) {
-      return res.status(403).json({ error: 'Пользователь не принимает сообщения от не друзей' });
+      // Даже если пользователь не принимает новые сообщения от не друзей,
+      // историю уже начатого чата показываем (иначе диалог "пропадает" после отписки).
+      const hasHistory = await client.query(
+        `
+        SELECT 1 FROM direct_messages
+        WHERE (from_user_id = $1 AND to_user_id = $2)
+           OR (from_user_id = $2 AND to_user_id = $1)
+        LIMIT 1
+        `,
+        [me, other],
+      );
+      if ((hasHistory.rowCount ?? 0) === 0) {
+        return res.status(403).json({ error: 'Пользователь не принимает сообщения от не друзей' });
+      }
     }
 
     const result = await client.query(
@@ -342,10 +418,6 @@ router.post('/with/:userId/view', authMiddleware, async (req: AuthRequest, res) 
 
   const client = await pool.connect();
   try {
-    if (await isBlockedEitherWay(client, me, other)) {
-      return res.status(403).json({ error: 'Чат недоступен: блокировка' });
-    }
-
     const anchor = await client.query(
       `
       SELECT id, created_at FROM direct_messages

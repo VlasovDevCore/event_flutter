@@ -102,20 +102,40 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
     try {
       final batch = await Future.wait<dynamic>([
         ApiClient.instance.getList('/friends', withAuth: true),
+        ApiClient.instance.getList('/messages/peers', withAuth: true),
         _fetchUnreadByPeerMap(),
       ]);
-      final list = batch[0] as List<dynamic>;
-      final unread = batch[1] as Map<String, int>;
+      final friendsList = batch[0] as List<dynamic>;
+      final peersList = batch[1] as List<dynamic>;
+      final unread = batch[2] as Map<String, int>;
       if (!mounted) return;
-      final friends = list
+      final friends = friendsList
           .map((e) => Map<String, dynamic>.from(e as Map))
           .toList();
+      final peers = peersList
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      // Объединяем: друзья + уже начатые чаты (чтобы после отписки чат не пропадал).
+      final byId = <String, Map<String, dynamic>>{};
+      for (final p in peers) {
+        final id = p['id']?.toString();
+        if (id == null || id.trim().isEmpty) continue;
+        byId[id] = p;
+      }
+      for (final f in friends) {
+        final id = f['id']?.toString();
+        if (id == null || id.trim().isEmpty) continue;
+        // Друг имеет приоритет по данным, но сохраняем поля из peers (block flags, allow, last_message_at и т.д.)
+        byId[id] = {...byId[id] ?? <String, dynamic>{}, ...f};
+      }
+      final merged = byId.values.toList();
       setState(() {
-        _friends = friends;
+        _friends = merged;
         _unreadByPeerId = unread;
         _loading = false;
       });
-      unawaited(_loadMuteStatusesForFriends(friends));
+      unawaited(_loadMuteStatusesForFriends(merged));
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() {
@@ -387,6 +407,15 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
           );
           final unread = id != null ? (_unreadByPeerId[id] ?? 0) : 0;
           final isMuted = id != null && _isMutedNow(id);
+          final isBlocked = f['is_blocked'] == true || f['isBlocked'] == true;
+          final isBlockedBy =
+              f['is_blocked_by'] == true || f['isBlockedBy'] == true;
+          final isChatBlocked = isBlocked || isBlockedBy;
+          final isFriends = f['is_friends'] == true || f['isFriends'] == true;
+          final allowNonFriends = f['allow_messages_from_non_friends'] == true ||
+              f['allowMessagesFromNonFriends'] == true;
+          final initialCanWrite =
+              !isChatBlocked && (isFriends || allowNonFriends);
 
           return _FriendChatCard(
             title: title,
@@ -394,6 +423,7 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
             avatarUrl: avatarUrl,
             unread: unread,
             isMuted: isMuted,
+            isBlocked: isChatBlocked,
             onTap: id == null
                 ? null
                 : () {
@@ -401,7 +431,13 @@ class _DirectChatPickerScreenState extends State<DirectChatPickerScreen> {
                         .push<void>(
                           MaterialPageRoute<void>(
                             builder: (_) =>
-                                DirectChatScreen(userId: id, title: title),
+                                DirectChatScreen(
+                                  userId: id,
+                                  title: title,
+                                  initialIsBlocked: isBlocked,
+                                  initialIsBlockedBy: isBlockedBy,
+                                  initialCanWrite: initialCanWrite,
+                                ),
                           ),
                         )
                         .then((_) async {
@@ -498,6 +534,7 @@ class _FriendChatCard extends StatelessWidget {
     required this.avatarUrl,
     required this.unread,
     required this.isMuted,
+    required this.isBlocked,
     required this.onTap,
   });
 
@@ -506,6 +543,7 @@ class _FriendChatCard extends StatelessWidget {
   final String? avatarUrl;
   final int unread;
   final bool isMuted;
+  final bool isBlocked;
   final VoidCallback? onTap;
 
   @override
@@ -537,11 +575,11 @@ class _FriendChatCard extends StatelessWidget {
                     title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontFamily: 'Inter',
                       fontSize: 16,
                       fontWeight: FontWeight.w700,
-                      color: Colors.white,
+                      color: isBlocked ? Colors.white70 : Colors.white,
                       height: 1.2,
                     ),
                   ),
@@ -560,9 +598,11 @@ class _FriendChatCard extends StatelessWidget {
               subtitle,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
+              style: TextStyle(
                 fontFamily: 'Inter',
-                color: Color(0xFFAAABB0),
+                color: isBlocked
+                    ? const Color(0xFFAAABB0).withOpacity(0.7)
+                    : const Color(0xFFAAABB0),
                 fontSize: 12,
               ),
             ),
@@ -573,14 +613,16 @@ class _FriendChatCard extends StatelessWidget {
                   width: 32,
                   height: 32,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: isBlocked ? Colors.white24 : Colors.white,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: IconButton(
                     padding: EdgeInsets.zero,
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.chat_bubble_outline,
-                      color: Color(0xFF161616),
+                      color: isBlocked
+                          ? const Color(0xFFB5BBC7)
+                          : const Color(0xFF161616),
                       size: 18,
                     ),
                     onPressed: onTap,

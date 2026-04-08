@@ -94,6 +94,14 @@ class DirectChatBloc extends ChangeNotifier {
   Function(String)? onShowError;
   Function(Offset anchorGlobalPosition, EventMessage msg)? onShowCopyMenu;
 
+  bool _messageActionsEnabled = true;
+  bool get messageActionsEnabled => _messageActionsEnabled;
+
+  void setMessageActionsEnabled(bool enabled) {
+    if (_messageActionsEnabled == enabled) return;
+    _messageActionsEnabled = enabled;
+  }
+
   Timer? _pollTimer;
 
   static const double scrollToBottomThresholdPx = 140;
@@ -512,6 +520,7 @@ class DirectChatBloc extends ChangeNotifier {
   }
 
   void showMyMessageActions(Offset anchorGlobalPosition, EventMessage msg) {
+    if (!messageActionsEnabled) return;
     final isSending = sendingStatus[msg.id] ?? false;
     onShowMyMessageActions?.call(anchorGlobalPosition, msg, isSending);
   }
@@ -519,6 +528,7 @@ class DirectChatBloc extends ChangeNotifier {
   void showOrganizerMessageActions(Offset anchorGlobalPosition, EventMessage msg) {}
 
   void showCopyMenuForMessage(Offset anchorGlobalPosition, EventMessage msg) {
+    if (!messageActionsEnabled) return;
     onShowCopyMenu?.call(anchorGlobalPosition, msg);
   }
 
