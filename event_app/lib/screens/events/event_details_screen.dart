@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -31,6 +32,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   bool _loading = true;
   bool _savingEdit = false;
   String? _error;
+  bool _accessLocked = false;
+  int _blacklistCount = 0;
 
   static const Color _bg = Color(0xFF161616);
 
@@ -76,6 +79,249 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         creatorEmail != null &&
         myEmail.toLowerCase() == creatorEmail;
     return byId || byEmail;
+  }
+
+  Future<void> _blacklistUserFromEvent(String userId) async {
+    try {
+      await ApiClient.instance.post(
+        '/events/${widget.event.id}/blacklist',
+        withAuth: true,
+        body: {'userId': userId},
+      );
+      if (!mounted) return;
+      setState(() => _blacklistCount += 1);
+      await _loadEvent();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Пользователь удалён')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Ошибка: $e')));
+    }
+  }
+
+  Future<void> _showEventBlacklist() async {
+    if (!_isLoggedIn) return;
+    final event = _event ?? widget.event;
+    if (!_isCreator(event)) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: const Color(0xFF1E1E1E),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.65,
+          minChildSize: 0.45,
+          maxChildSize: 0.92,
+          expand: false,
+          builder: (context, scrollController) {
+            return FutureBuilder<Map<String, dynamic>>(
+              future: ApiClient.instance.get(
+                '/events/${widget.event.id}/blacklist',
+                withAuth: true,
+              ),
+              builder: (context, snapshot) {
+                final usersRaw = snapshot.data?['users'];
+                final users = usersRaw is List ? usersRaw : const [];
+
+                return Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.block, color: Colors.white70),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Чёрный список (${users.length})',
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                fontWeight: FontWeight.w600,
+                                fontSize: 18,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.pop(context),
+                            icon: const Icon(Icons.close, color: Colors.white70),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: (snapshot.connectionState != ConnectionState.done)
+                          ? const Center(
+                              child: CircularProgressIndicator(color: Colors.white),
+                            )
+                          : (users.isEmpty
+                              ? const SizedBox.shrink()
+                              : ListView.separated(
+                                  controller: scrollController,
+                                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                                  itemCount: users.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(height: 10),
+                                  itemBuilder: (context, index) {
+                                    final u = users[index];
+                                    if (u is! Map) return const SizedBox.shrink();
+                                    final map = Map<String, dynamic>.from(u);
+                                    final id = map['id']?.toString() ?? '';
+                                    final avatarUrl =
+                                        (map['avatar_url'] ?? map['avatarUrl'])
+                                            ?.toString();
+                                    final displayName =
+                                        (map['display_name'] ?? map['displayName'])
+                                            ?.toString()
+                                            .trim();
+                                    final username = map['username']?.toString().trim();
+                                    final email = map['email']?.toString().trim();
+                                    final title = (displayName != null && displayName.isNotEmpty)
+                                        ? displayName
+                                        : (username != null && username.isNotEmpty)
+                                            ? '@$username'
+                                            : (email ?? 'Пользователь');
+                                    final subtitle = (username != null && username.isNotEmpty)
+                                        ? '@$username'
+                                        : (email ?? '—');
+
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF141414),
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      child: ListTile(
+                                        leading: ClipRRect(
+                                          borderRadius: BorderRadius.circular(12),
+                                          child: (() {
+                                            if (avatarUrl == null ||
+                                                avatarUrl.trim().isEmpty) {
+                                              return Container(
+                                                width: 44,
+                                                height: 44,
+                                                color: const Color(0xFF2A2A2A),
+                                                child: const Icon(
+                                                  Icons.person,
+                                                  color: Colors.white54,
+                                                  size: 22,
+                                                ),
+                                              );
+                                            }
+                                            final resolved =
+                                                _resolveAvatarUrl(avatarUrl);
+                                            if (resolved == null ||
+                                                resolved.trim().isEmpty) {
+                                              return Container(
+                                                width: 44,
+                                                height: 44,
+                                                color: const Color(0xFF2A2A2A),
+                                                child: const Icon(
+                                                  Icons.person,
+                                                  color: Colors.white54,
+                                                  size: 22,
+                                                ),
+                                              );
+                                            }
+                                            return Image.network(
+                                              resolved,
+                                              width: 44,
+                                              height: 44,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, __, ___) =>
+                                                  Container(
+                                                width: 44,
+                                                height: 44,
+                                                color: const Color(0xFF2A2A2A),
+                                                child: const Icon(
+                                                  Icons.person,
+                                                  color: Colors.white54,
+                                                  size: 22,
+                                                ),
+                                              ),
+                                            );
+                                          })(),
+                                        ),
+                                        title: Text(
+                                          title,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        subtitle: Text(
+                                          subtitle,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: Color(0xFFAAABB0),
+                                          ),
+                                        ),
+                                        trailing: IconButton(
+                                          tooltip: 'Убрать из чёрного списка',
+                                          onPressed: id.trim().isEmpty
+                                              ? null
+                                              : () async {
+                                                  try {
+                                                    await ApiClient.instance.delete(
+                                                      '/events/${widget.event.id}/blacklist/$id',
+                                                      withAuth: true,
+                                                    );
+                                                    if (!mounted) return;
+                                                    setState(() {
+                                                      _blacklistCount =
+                                                          (_blacklistCount - 1).clamp(
+                                                        0,
+                                                        1 << 30,
+                                                      );
+                                                    });
+                                                    Navigator.pop(context);
+                                                    await _loadEvent();
+                                                  } catch (_) {}
+                                                },
+                                          icon: const Icon(
+                                            Icons.remove_circle_outline,
+                                            color: Color(0xFFFF5F57),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                )),
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _refreshBlacklistCount() async {
+    if (!_isLoggedIn) return;
+    final event = _event ?? widget.event;
+    if (!_isCreator(event)) return;
+    try {
+      final data = await ApiClient.instance.get(
+        '/events/${widget.event.id}/blacklist/count',
+        withAuth: true,
+      );
+      final raw = data['count'];
+      final n = raw is int ? raw : int.tryParse('$raw') ?? 0;
+      if (!mounted) return;
+      setState(() => _blacklistCount = n < 0 ? 0 : n);
+    } catch (_) {}
   }
 
   Future<void> _openYandexMaps() async {
@@ -301,6 +547,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     setState(() {
       _loading = true;
       _error = null;
+      _accessLocked = false;
     });
     try {
       final client = ApiClient.instance;
@@ -312,9 +559,14 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
         _event = Event.fromApiMap(data);
         _loading = false;
       });
+      // подтянем счётчик ЧС (если я организатор)
+      unawaited(_refreshBlacklistCount());
     } catch (e) {
+      final api = e is ApiException ? e : null;
       setState(() {
-        _error = e is ApiException ? e.message : e.toString();
+        _accessLocked =
+            api != null && (api.statusCode == 403 || api.statusCode == 404);
+        _error = api != null ? api.message : e.toString();
         _event = null;
         _loading = false;
       });
@@ -469,7 +721,82 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                 ? const Center(
                     child: CircularProgressIndicator(color: Colors.white),
                   )
-                : CustomScrollView(
+                : (_accessLocked
+                    ? Stack(
+                        children: [
+                          Positioned(
+                            top: 8,
+                            right: 12,
+                            child: SafeArea(
+                              bottom: false,
+                              child: Container(
+                                width: 37,
+                                height: 37,
+                                decoration: BoxDecoration(
+                                  color: const Color.fromARGB(157, 0, 0, 0),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(12),
+                                    onTap: () => Navigator.of(context).pop(),
+                                    splashColor:
+                                        const Color.fromARGB(157, 0, 0, 0),
+                                    highlightColor:
+                                        const Color.fromARGB(157, 0, 0, 0),
+                                    child: const Center(
+                                      child: Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Image.asset(
+                                    'assets/friends/lock-dynamic-color.png',
+                                    width: 120,
+                                    height: 120,
+                                  ),
+                                  const SizedBox(height: 18),
+                                  const Text(
+                                    'Доступ к событию закрыт',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w700,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Вы не можете просматривать это событие.',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 14,
+                                      height: 1.35,
+                                      color: Color(0xFFAAABB0),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : CustomScrollView(
                     slivers: [
                       // Кастомный заголовок
                       SliverToBoxAdapter(
@@ -562,7 +889,33 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                               event: event,
                               currentUserEmail: me,
                               onProfileTap: _openProfileById,
+                              canManageBlacklist: _isCreator(event) && _isLoggedIn,
+                              onBlacklistUser: _blacklistUserFromEvent,
                             ),
+                            if (_isCreator(event) && _isLoggedIn && _blacklistCount > 0) ...[
+                              const SizedBox(height: 10),
+                              SizedBox(
+                                width: double.infinity,
+                                height: 48,
+                                child: FilledButton(
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: const Color(0xFF2A2A2A),
+                                    foregroundColor: Colors.white,
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                    ),
+                                  ),
+                                  onPressed: _showEventBlacklist,
+                                  child: Text(
+                                    'Чёрный список участников ($_blacklistCount)',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                             const SizedBox(height: 10),
                             // Кнопки RSVP
                             DetailRsvpSection(
@@ -580,7 +933,7 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                         ),
                       ),
                     ],
-                  ),
+                  )),
           ),
         ],
       ),

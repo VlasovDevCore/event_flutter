@@ -39,6 +39,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final MapController _mapController = MapController();
   List<Event> _events = [];
+  Set<String> _blockedUserIds = {};
   LatLng? _userPosition;
   List<Event> _visibleEvents = [];
   Event? _selectedEventPreview;
@@ -108,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _loadUserProfile(); // Загружаем профиль при старте
+    _loadBlockedUserIds();
     _loadEventsFromApi();
     _initLocation(zoom: 13, immediateZoom: false);
     _fetchDirectUnreadCount();
@@ -164,7 +166,38 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _fetchEventUnreadCount();
       _fetchIncomingFriendRequestsCount();
       _fetchUnreadNewsFlag();
+      _loadBlockedUserIds();
     }
+  }
+
+  Future<void> _loadBlockedUserIds() async {
+    if (Hive.box('authBox').get('token') == null) {
+      if (mounted) setState(() => _blockedUserIds = {});
+      return;
+    }
+    try {
+      final data = await ApiClient.instance.get('/blocks/list', withAuth: true);
+      final raw = data['userIds'];
+      if (raw is! List) return;
+      final ids = raw
+          .map((e) => e.toString())
+          .where((s) => s.trim().isNotEmpty)
+          .toSet();
+      if (!mounted) return;
+      setState(() => _blockedUserIds = ids);
+      _recomputeVisibleEvents();
+    } catch (_) {
+      // тихо игнорируем: при ошибке не ломаем ленту
+    }
+  }
+
+  List<Event> _applyBlockedFilter(List<Event> events) {
+    if (_blockedUserIds.isEmpty) return events;
+    return events.where((e) {
+      final cid = e.creatorId?.trim();
+      if (cid == null || cid.isEmpty) return true;
+      return !_blockedUserIds.contains(cid);
+    }).toList();
   }
 
   Future<void> _fetchDirectUnreadCount() async {
@@ -302,7 +335,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     try {
       final client = ApiClient.instance;
       final items = await client.getList('/events');
-      final events = _parseEventsFromJson(items);
+      final events = _applyBlockedFilter(_parseEventsFromJson(items));
       if (!mounted) return;
       setState(() {
         _events = events;
@@ -336,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       try {
         final client = ApiClient.instance;
         final items = await client.getList('/events', query: {'bbox': bbox});
-        final events = _parseEventsFromJson(items);
+        final events = _applyBlockedFilter(_parseEventsFromJson(items));
         if (!mounted) return;
         setState(() {
           _events = events;

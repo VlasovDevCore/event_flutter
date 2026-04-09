@@ -4,7 +4,7 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 import { pool } from '../db';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, AuthRequest, optionalAuthMiddleware } from '../middleware/auth';
 import { notifyEventChatMessage } from '../services/push';
 import { decryptMessageText, encryptMessageText } from '../utils/messageCrypto';
 
@@ -403,9 +403,10 @@ router.post('/news/:id/view', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 // Список событий в bbox (для карты)
-router.get('/', async (req, res) => {
+router.get('/', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   const bbox = (req.query.bbox as string | undefined)?.split(',').map(Number);
   // bbox: minLon,minLat,maxLon,maxLat
+  const me = req.user?.id;
   const client = await pool.connect();
   try {
     if (bbox && bbox.length === 4 && bbox.every((n) => Number.isFinite(n))) {
@@ -423,9 +424,16 @@ router.get('/', async (req, res) => {
         WHERE lon BETWEEN $1 AND $2
           AND lat BETWEEN $3 AND $4
           AND (ends_at IS NULL OR ends_at >= now())
+          AND (
+            $5::uuid IS NULL
+            OR NOT EXISTS (
+              SELECT 1 FROM event_blacklist bl
+              WHERE bl.event_id = e.id AND bl.user_id = $5
+            )
+          )
         ORDER BY e.created_at DESC
         `,
-        [minLon, maxLon, minLat, maxLat],
+        [minLon, maxLon, minLat, maxLat, me ?? null],
       );
       return res.json(result.rows);
     }
@@ -441,9 +449,17 @@ router.get('/', async (req, res) => {
       FROM events e
       LEFT JOIN users u ON u.id = e.created_by
       WHERE (e.ends_at IS NULL OR e.ends_at >= now())
+        AND (
+          $1::uuid IS NULL
+          OR NOT EXISTS (
+            SELECT 1 FROM event_blacklist bl
+            WHERE bl.event_id = e.id AND bl.user_id = $1
+          )
+        )
       ORDER BY e.created_at DESC
       LIMIT 200
       `,
+      [me ?? null],
     );
     return res.json(result.rows);
   } catch (err) {
@@ -630,10 +646,21 @@ router.get('/my/created', authMiddleware, async (req: AuthRequest, res) => {
 });
 
 // Детали события (с списками приду/не приду по email)
-router.get('/:id', async (req, res) => {
+router.get('/:id', optionalAuthMiddleware, async (req: AuthRequest, res) => {
   const { id } = req.params;
   const client = await pool.connect();
   try {
+    const me = req.user?.id;
+    if (me) {
+      const bl = await client.query(
+        `SELECT 1 FROM event_blacklist WHERE event_id = $1 AND user_id = $2`,
+        [id, me],
+      );
+      if ((bl.rowCount ?? 0) > 0) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+    }
+
     const result = await client.query(
       `
       SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
@@ -680,6 +707,134 @@ router.get('/:id', async (req, res) => {
     return res.json(event);
   } catch (err) {
     // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+// Черный список события (только создатель события)
+router.get('/:id/blacklist/count', authMiddleware, async (req: AuthRequest, res) => {
+  const eventId = String(req.params.id);
+  const me = req.user?.id;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+
+  const client = await pool.connect();
+  try {
+    const own = await client.query(`SELECT created_by FROM events WHERE id = $1`, [eventId]);
+    if (own.rowCount === 0) return res.status(404).json({ error: 'Event not found' });
+    const ownerId = (own.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== me) {
+      return res.status(403).json({ error: 'Только создатель может управлять черным списком' });
+    }
+
+    const r = await client.query(
+      `SELECT COUNT(*)::int AS count FROM event_blacklist WHERE event_id = $1`,
+      [eventId],
+    );
+    const count = (r.rows[0]?.count as number) ?? 0;
+    return res.json({ count });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.get('/:id/blacklist', authMiddleware, async (req: AuthRequest, res) => {
+  const eventId = String(req.params.id);
+  const me = req.user?.id;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+
+  const client = await pool.connect();
+  try {
+    const own = await client.query(`SELECT created_by FROM events WHERE id = $1`, [eventId]);
+    if (own.rowCount === 0) return res.status(404).json({ error: 'Event not found' });
+    const ownerId = (own.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== me) {
+      return res.status(403).json({ error: 'Только создатель может управлять черным списком' });
+    }
+
+    const r = await client.query(
+      `
+      SELECT u.id, u.email, u.username, u.display_name, u.avatar_url, u.status, bl.created_at
+      FROM event_blacklist bl
+      JOIN users u ON u.id = bl.user_id
+      WHERE bl.event_id = $1
+      ORDER BY bl.created_at DESC
+      `,
+      [eventId],
+    );
+    return res.json({ users: r.rows });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.post('/:id/blacklist', authMiddleware, async (req: AuthRequest, res) => {
+  const eventId = String(req.params.id);
+  const me = req.user?.id;
+  const { userId } = req.body as { userId?: string };
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+  if (!userId || typeof userId !== 'string') return res.status(400).json({ error: 'Укажите userId' });
+  if (userId === me) return res.status(400).json({ error: 'Нельзя добавить себя' });
+
+  const client = await pool.connect();
+  try {
+    const own = await client.query(`SELECT created_by FROM events WHERE id = $1`, [eventId]);
+    if (own.rowCount === 0) return res.status(404).json({ error: 'Event not found' });
+    const ownerId = (own.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== me) {
+      return res.status(403).json({ error: 'Только создатель может управлять черным списком' });
+    }
+
+    await client.query(
+      `
+      INSERT INTO event_blacklist (event_id, user_id, added_by)
+      VALUES ($1, $2, $3)
+      ON CONFLICT (event_id, user_id) DO NOTHING
+      `,
+      [eventId, userId, me],
+    );
+    // снимаем RSVP у пользователя, чтобы он перестал быть участником
+    await client.query(`DELETE FROM event_rsvp WHERE event_id = $1 AND user_id = $2`, [eventId, userId]);
+    return res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
+router.delete('/:id/blacklist/:userId', authMiddleware, async (req: AuthRequest, res) => {
+  const eventId = String(req.params.id);
+  const me = req.user?.id;
+  const userId = String(req.params.userId);
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+  if (!eventId) return res.status(400).json({ error: 'Invalid event id' });
+  if (!userId) return res.status(400).json({ error: 'Invalid userId' });
+
+  const client = await pool.connect();
+  try {
+    const own = await client.query(`SELECT created_by FROM events WHERE id = $1`, [eventId]);
+    if (own.rowCount === 0) return res.status(404).json({ error: 'Event not found' });
+    const ownerId = (own.rows[0] as { created_by: string | null }).created_by;
+    if (!ownerId || ownerId !== me) {
+      return res.status(403).json({ error: 'Только создатель может управлять черным списком' });
+    }
+
+    await client.query(`DELETE FROM event_blacklist WHERE event_id = $1 AND user_id = $2`, [eventId, userId]);
+    return res.json({ ok: true });
+  } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal error' });
   } finally {
@@ -808,6 +963,14 @@ router.post('/:id/rsvp', authMiddleware, async (req: AuthRequest, res) => {
 
   const client = await pool.connect();
   try {
+    const bl = await client.query(
+      `SELECT 1 FROM event_blacklist WHERE event_id = $1 AND user_id = $2`,
+      [eventId, userId],
+    );
+    if ((bl.rowCount ?? 0) > 0) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+
     if (status === 0) {
       await client.query(
         'DELETE FROM event_rsvp WHERE event_id = $1 AND user_id = $2',
@@ -878,6 +1041,14 @@ router.post('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   }
   const client = await pool.connect();
   try {
+    const bl = await client.query(
+      `SELECT 1 FROM event_blacklist WHERE event_id = $1 AND user_id = $2`,
+      [eventId, userId],
+    );
+    if ((bl.rowCount ?? 0) > 0) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+
     const participant = await client.query(
       'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
       [eventId, userId],
@@ -1098,6 +1269,14 @@ router.get('/:id/messages', authMiddleware, async (req: AuthRequest, res) => {
   }
   const client = await pool.connect();
   try {
+    const bl = await client.query(
+      `SELECT 1 FROM event_blacklist WHERE event_id = $1 AND user_id = $2`,
+      [eventId, userId],
+    );
+    if ((bl.rowCount ?? 0) > 0) {
+      return res.status(403).json({ error: 'Доступ запрещён' });
+    }
+
     const participant = await client.query(
       'SELECT 1 FROM event_rsvp WHERE event_id = $1 AND user_id = $2 AND status = 1',
       [eventId, userId],

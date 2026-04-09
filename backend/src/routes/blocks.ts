@@ -4,6 +4,38 @@ import { authMiddleware, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 
+// Список пользователей, с кем есть блокировка в любую сторону.
+router.get('/list', authMiddleware, async (req: AuthRequest, res) => {
+  const me = req.user?.id;
+  if (!me) return res.status(401).json({ error: 'Unauthorized' });
+
+  const client = await pool.connect();
+  try {
+    const r = await client.query(
+      `
+      SELECT DISTINCT peer_id FROM (
+        SELECT blocked_user_id AS peer_id
+        FROM user_blocks
+        WHERE blocker_user_id = $1
+        UNION ALL
+        SELECT blocker_user_id AS peer_id
+        FROM user_blocks
+        WHERE blocked_user_id = $1
+      ) t
+      `,
+      [me],
+    );
+    const userIds = r.rows.map((row) => String(row.peer_id));
+    return res.json({ userIds });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 router.get('/status/:userId', authMiddleware, async (req: AuthRequest, res) => {
   const me = req.user?.id;
   const other = req.params.userId as string;

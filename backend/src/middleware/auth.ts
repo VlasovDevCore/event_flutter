@@ -30,3 +30,27 @@ export function authMiddleware(
   }
 }
 
+// Like authMiddleware, but does not fail when Authorization is missing/invalid.
+// Use this for public endpoints that may optionally filter by current user.
+export function optionalAuthMiddleware(
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction,
+) {
+  const header = req.headers.authorization;
+  if (!header?.startsWith('Bearer ')) {
+    return next();
+  }
+  const token = header.slice('Bearer '.length).trim();
+  try {
+    const payload = jwt.verify(token, JWT_SECRET) as {
+      sub: string;
+      email: string;
+    };
+    req.user = { id: payload.sub, email: payload.email };
+  } catch {
+    // ignore invalid token for optional auth
+  }
+  return next();
+}
+

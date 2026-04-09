@@ -337,13 +337,15 @@ class _DirectChatScreenState extends State<DirectChatScreen> {
         );
       }
       if (!mounted) return;
-      setState(() => _isBlocked = willBlock);
+      setState(() {
+        _isBlocked = willBlock;
+        // Сразу обновляем разрешение писать, чтобы нижний блок сменился без "мигания".
+        _canWriteKnown = _canWriteToPeer;
+      });
+      _syncMessageActionsEnabled();
       _showToast(
         willBlock ? 'Пользователь заблокирован' : 'Пользователь разблокирован',
       );
-      if (willBlock) {
-        Navigator.of(context).maybePop();
-      }
     } on ApiException catch (e) {
       _showToast(e.statusCode == 401 ? 'Войдите в аккаунт' : e.message);
     } catch (_) {

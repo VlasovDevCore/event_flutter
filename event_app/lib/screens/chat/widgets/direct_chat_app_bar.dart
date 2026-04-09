@@ -85,7 +85,7 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
                             ),
                           ),
                           if (isMuted) ...[
-                            const SizedBox(width: 4), // маленький отступ
+                            const SizedBox(width: 4),
                             Icon(
                               Icons.notifications_off_outlined,
                               size: 16,
@@ -167,49 +167,48 @@ class DirectChatAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   Widget _buildAvatar(BuildContext context) {
     final url = _fullAvatarUrl;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF5C6BC0), Color(0xFF3949AB)],
+    final scheme = Theme.of(context).colorScheme;
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 50,
+        height: 50,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2A2A2A),
+          borderRadius: BorderRadius.circular(12),
         ),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
         child: url != null && url.isNotEmpty
             ? CachedNetworkImage(
                 imageUrl: url,
-                fit: BoxFit.cover,
                 width: 50,
                 height: 50,
-                placeholder: (context, u) => Center(
-                  child: Text(
-                    titleLetter,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 18,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Center(
+                  child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: scheme.primary,
                     ),
                   ),
                 ),
-                errorWidget: (context, u, e) => _letterPlaceholder(),
+                errorWidget: (context, url, error) => Center(
+                  child: Icon(
+                    Icons.person,
+                    color: scheme.onSurfaceVariant,
+                    size: 24,
+                  ),
+                ),
               )
-            : _letterPlaceholder(),
-      ),
-    );
-  }
-
-  Widget _letterPlaceholder() {
-    return Center(
-      child: Text(
-        titleLetter,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 18,
-        ),
+            : Center(
+                child: Icon(
+                  Icons.person,
+                  color: scheme.onSurfaceVariant,
+                  size: 24,
+                ),
+              ),
       ),
     );
   }

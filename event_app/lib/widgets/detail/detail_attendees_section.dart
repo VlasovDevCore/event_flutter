@@ -6,13 +6,72 @@ class DetailAttendeesSection extends StatelessWidget {
   final Event event;
   final String? currentUserEmail;
   final Function(String) onProfileTap;
+  final bool canManageBlacklist;
+  final Future<void> Function(String userId)? onBlacklistUser;
 
   const DetailAttendeesSection({
     super.key,
     required this.event,
     required this.currentUserEmail,
     required this.onProfileTap,
+    this.canManageBlacklist = false,
+    this.onBlacklistUser,
   });
+
+  Future<void> _confirmBlacklistUser(
+    BuildContext context,
+    EventUserProfile profile,
+  ) async {
+    if (!canManageBlacklist || onBlacklistUser == null) return;
+    if (profile.id.trim().isEmpty) return;
+    if (profile.id == event.creatorId) return;
+
+    final name = (profile.displayName?.isNotEmpty == true)
+        ? profile.displayName!
+        : (profile.username?.isNotEmpty == true ? '@${profile.username}' : 'Пользователь');
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF161616),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'Удалить участника?',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        content: Text(
+          '$name больше не будет видеть это событие.',
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            height: 1.35,
+            color: Color(0xFFAAABB0),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text(
+              'Отмена',
+              style: TextStyle(color: Colors.white),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text(
+              'Удалить',
+              style: TextStyle(color: Color(0xFFFF5F57), fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    await onBlacklistUser!(profile.id);
+  }
 
   void _showAllAttendees(
     BuildContext context,
@@ -122,6 +181,12 @@ class DetailAttendeesSection extends StatelessWidget {
                           Navigator.pop(context);
                           onProfileTap(profile.id);
                         },
+                        onLongPress: canManageBlacklist && onBlacklistUser != null
+                            ? () async {
+                                Navigator.pop(context);
+                                await _confirmBlacklistUser(context, profile);
+                              }
+                            : null,
                         child: Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -412,6 +477,9 @@ class DetailAttendeesSection extends StatelessWidget {
 
                         return GestureDetector(
                           onTap: () => onProfileTap(profile.id),
+                          onLongPress: canManageBlacklist && onBlacklistUser != null
+                              ? () => _confirmBlacklistUser(context, profile)
+                              : null,
                           child: Column(
                             mainAxisSize: MainAxisSize.min,
                             children: [
