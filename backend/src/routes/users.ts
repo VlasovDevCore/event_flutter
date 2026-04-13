@@ -601,6 +601,44 @@ router.get('/:id/achievements', async (req, res) => {
   }
 });
 
+// Активные события, созданные пользователем (до 3, от нового к старому).
+// ВАЖНО: должен быть до /:id, иначе перехватится как id=".../active-events".
+router.get('/:id/active-events', async (req, res) => {
+  const { id: userId } = req.params;
+  const client = await pool.connect();
+  try {
+    const exists = await client.query('SELECT 1 FROM users WHERE id = $1', [userId]);
+    if (exists.rowCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const result = await client.query(
+      `
+      SELECT e.id, e.title, e.description, e.image_url, e.lat, e.lon,
+             e.marker_color_value, e.marker_icon_code, e.created_at, e.ends_at,
+             e.created_by AS created_by_user_id,
+             u.email AS created_by_email,
+             u.username AS created_by_username,
+             u.display_name AS created_by_display_name
+      FROM events e
+      LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.created_by = $1
+        AND (e.ends_at IS NULL OR e.ends_at >= now())
+      ORDER BY e.created_at DESC
+      LIMIT 3
+      `,
+      [userId],
+    );
+    return res.json({ events: result.rows });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(err);
+    return res.status(500).json({ error: 'Internal error' });
+  } finally {
+    client.release();
+  }
+});
+
 // Публичный профиль пользователя (для просмотра в деталях события)
 // ВАЖНО: должен быть после /search, иначе перехватит этот маршрут.
 router.get('/:id', async (req, res) => {

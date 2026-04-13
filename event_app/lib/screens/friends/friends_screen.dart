@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import '../../services/api_client.dart';
-import '../profile/profile_screen.dart';
 import 'add_friend_screen.dart';
 import 'widgets/friends_tab.dart';
 import 'widgets/requests_tab.dart';
+import '../auth/verify_email_code_screen.dart';
 
 /// Экран «Мои друзья»: входящие заявки и кнопка «Добавить в друзья».
 class FriendsScreen extends StatefulWidget {
@@ -121,6 +122,104 @@ class _FriendsScreenState extends State<FriendsScreen>
     super.dispose();
   }
 
+  Future<bool?> _showVerifyEmailGate(BuildContext context) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              Center(
+                child: Image.asset(
+                  'assets/avatar/at-dynamic-color.png',
+                  width: 54,
+                  height: 54,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Подтвердите email',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Чтобы искать людей и добавлять в друзья, подтвердите почту кодом из письма.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  height: 1.35,
+                  color: Color(0xFFAAABB0),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 52,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final ok = await Navigator.of(ctx).push<bool>(
+                      MaterialPageRoute<bool>(
+                        builder: (_) => const VerifyEmailCodeScreen(),
+                      ),
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.of(ctx).pop(ok == true);
+                  },
+                  child: const Text('Подтвердить email'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF222222)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Пока нет'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -223,6 +322,11 @@ class _FriendsScreenState extends State<FriendsScreen>
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: () async {
+            final status = (Hive.box('authBox').get('status') as int?) ?? 1;
+            if (status == 0) {
+              final ok = await _showVerifyEmailGate(context);
+              if (ok != true) return;
+            }
             await Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const AddFriendScreen()),
             );

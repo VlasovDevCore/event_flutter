@@ -18,6 +18,7 @@ class ProfileActionsBar extends StatelessWidget {
     this.onLogoutPressed,
     this.onBlockPressed,
     this.onUnblockPressed,
+    this.onReportPressed,
     this.isSaving = false,
     this.isBlocked = false,
     this.menuBackgroundColor = const Color.fromARGB(255, 0, 0, 0),
@@ -32,6 +33,7 @@ class ProfileActionsBar extends StatelessWidget {
   final VoidCallback? onLogoutPressed;
   final VoidCallback? onBlockPressed;
   final VoidCallback? onUnblockPressed;
+  final VoidCallback? onReportPressed;
   final bool isSaving;
   final bool isBlocked;
   final double buttonSize;
@@ -56,6 +58,7 @@ class ProfileActionsBar extends StatelessWidget {
         onLogoutPressed: onLogoutPressed,
         onBlockPressed: onBlockPressed,
         onUnblockPressed: onUnblockPressed,
+        onReportPressed: onReportPressed,
         isSaving: isSaving,
         isBlocked: isBlocked,
         iconColor: iconColor,
@@ -113,6 +116,7 @@ class _ActionMenu extends StatelessWidget {
     required this.onLogoutPressed,
     required this.onBlockPressed,
     required this.onUnblockPressed,
+    required this.onReportPressed,
     required this.isSaving,
     required this.isBlocked,
     required this.iconColor,
@@ -129,6 +133,7 @@ class _ActionMenu extends StatelessWidget {
   final VoidCallback? onLogoutPressed;
   final VoidCallback? onBlockPressed;
   final VoidCallback? onUnblockPressed;
+  final VoidCallback? onReportPressed;
   final bool isSaving;
   final bool isBlocked;
   final Color iconColor;
@@ -235,6 +240,25 @@ class _ActionMenu extends StatelessWidget {
                 highlightColor: highlightColor,
                 borderRadius: itemBorderRadius,
               ),
+          ],
+
+          if (onReportPressed != null) ...[
+            const Divider(height: 1, color: Color.fromARGB(179, 41, 41, 41)),
+            _MenuItem(
+              icon: Icons.flag,
+              title: 'Жалоба',
+              onTap: () {
+                Navigator.pop(context);
+                onReportPressed?.call();
+              },
+              iconColor: Colors.red,
+              iconSize: iconSize,
+              isDisabled: isSaving,
+              isDestructive: true,
+              splashColor: splashColor,
+              highlightColor: highlightColor,
+              borderRadius: itemBorderRadius,
+            ),
           ],
 
           // Выход (только для своего профиля)

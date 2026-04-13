@@ -1,9 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
 import '../../services/push_notifications_service.dart';
 import '../home/home_screen.dart';
+import 'auth_profile_setup_screen.dart';
+import 'widgets/auth_background.dart';
+import 'widgets/auth_colors.dart';
+import 'widgets/auth_error_sheet.dart';
+import 'widgets/auth_header.dart';
+import 'widgets/auth_primary_button.dart';
+import 'widgets/auth_text_field.dart';
+import 'widgets/auth_toggle.dart';
 
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key});
@@ -17,15 +27,78 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isLogin = true;
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _usernameController = TextEditingController();
   bool _loading = false;
+  bool? _emailAvailable;
+  bool _checkingEmail = false;
+  Timer? _emailDebounce;
+  bool _passwordObscured = true;
+  String _passwordDraft = '';
 
   @override
   void dispose() {
+    _emailDebounce?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
-    _usernameController.dispose();
     super.dispose();
+  }
+
+  bool _isValidEmail(String email) {
+    final e = email.trim();
+    return RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$').hasMatch(e);
+  }
+
+  String? _validatePassword(String password) {
+    final p = password;
+    if (p.length < 8) return 'Минимум 8 символов';
+    if (!RegExp(r'^[\x21-\x7E]+$').hasMatch(p)) {
+      return 'Только латиница, цифры и символы (без пробелов/кириллицы)';
+    }
+    if (!RegExp(r'[A-Za-z]').hasMatch(p)) return 'Добавьте английскую букву';
+    if (!RegExp(r'[0-9]').hasMatch(p)) return 'Добавьте цифру';
+    if (!RegExp(r'[^A-Za-z0-9]').hasMatch(p)) return 'Добавьте спецсимвол';
+    return null;
+  }
+
+  bool _hasAsciiNoSpace(String s) => RegExp(r'^[\x21-\x7E]+$').hasMatch(s);
+  bool _hasLetter(String s) => RegExp(r'[A-Za-z]').hasMatch(s);
+  bool _hasDigit(String s) => RegExp(r'[0-9]').hasMatch(s);
+  bool _hasSymbol(String s) => RegExp(r'[^A-Za-z0-9]').hasMatch(s);
+  bool _hasMinLen(String s) => s.length >= 8;
+
+  void _onEmailChanged(String value) {
+    if (_isLogin) return;
+    _emailDebounce?.cancel();
+    final v = value.trim();
+    if (v.isEmpty || !_isValidEmail(v)) {
+      setState(() {
+        _emailAvailable = null;
+        _checkingEmail = false;
+      });
+      return;
+    }
+    setState(() => _checkingEmail = true);
+    _emailDebounce = Timer(const Duration(milliseconds: 450), () async {
+      try {
+        await ApiClient.instance.get('/auth/check-email?email=$v');
+        if (!mounted) return;
+        setState(() {
+          _emailAvailable = true;
+          _checkingEmail = false;
+        });
+      } on ApiException catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _emailAvailable = e.statusCode == 409 ? false : null;
+          _checkingEmail = false;
+        });
+      } catch (_) {
+        if (!mounted) return;
+        setState(() {
+          _emailAvailable = null;
+          _checkingEmail = false;
+        });
+      }
+    });
   }
 
   // Новый метод для загрузки полного профиля пользователя
@@ -57,13 +130,10 @@ class _AuthScreenState extends State<AuthScreen> {
         );
       }
 
-      print(
-        'Profile loaded successfully: displayName=${response['displayName']}, avatarUrl=${response['avatarUrl']}',
-      );
     } catch (e) {
-      print('Error loading full profile: $e');
       // Не показываем ошибку пользователю, так как вход уже выполнен успешно
       // Просто логируем
+      debugPrint('Error loading full profile: $e');
     }
   }
 
@@ -71,7 +141,25 @@ class _AuthScreenState extends State<AuthScreen> {
     if (!_formKey.currentState!.validate()) return;
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
-    final username = _usernameController.text.trim();
+
+    if (!_isLogin) {
+      if (_checkingEmail) return;
+      if (_emailAvailable == false) {
+        await showAuthErrorSheet(
+          context,
+          title: 'Этот email занят',
+          message: 'Этот email уже зарегистрирован. Попробуйте войти.',
+        );
+        return;
+      }
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => AuthProfileSetupScreen(email: email, password: password),
+        ),
+      );
+      return;
+    }
 
     setState(() {
       _loading = true;
@@ -79,13 +167,12 @@ class _AuthScreenState extends State<AuthScreen> {
 
     try {
       final client = ApiClient.instance;
-      final path = _isLogin ? '/auth/login' : '/auth/register';
+      final path = '/auth/login';
       final response = await client.post(
         path,
         body: {
           'email': email,
           'password': password,
-          if (!_isLogin && username.isNotEmpty) 'username': username,
         },
       );
 
@@ -127,14 +214,18 @@ class _AuthScreenState extends State<AuthScreen> {
       ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
     } on ApiException catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      await showAuthErrorSheet(
         context,
-      ).showSnackBar(SnackBar(content: Text(e.message)));
+        title: _isLogin ? 'Не удалось войти' : 'Не удалось зарегистрироваться',
+        message: e.message,
+      );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
+      await showAuthErrorSheet(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Ошибка сети')));
+        title: 'Ошибка сети',
+        message: 'Проверьте интернет и попробуйте ещё раз.',
+      );
     } finally {
       if (mounted) {
         setState(() {
@@ -147,130 +238,244 @@ class _AuthScreenState extends State<AuthScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  _isLogin ? 'Вход' : 'Регистрация',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: 24),
-                Card(
-                  elevation: 2,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+      backgroundColor: AuthColors.bg,
+      body: AuthBackground(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AuthHeader(
+                    title: _isLogin ? 'Вход' : 'Регистрация',
+                    subtitle: _isLogin
+                        ? 'Войдите, чтобы создавать встречи и общаться.'
+                        : 'Создайте аккаунт, чтобы начать пользоваться приложением.',
                   ),
-                  child: Padding(
+                  const SizedBox(height: 18),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AuthColors.card,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: const Color(0xFF1E1E1E)),
+                    ),
                     padding: const EdgeInsets.all(16),
                     child: Form(
                       key: _formKey,
                       child: Column(
-                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          TextFormField(
+                          AuthTextField(
                             controller: _emailController,
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              border: OutlineInputBorder(),
-                            ),
+                            label: 'Email',
+                            hint: 'example@mail.com',
                             keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            enabled: !_loading,
+                            onChanged: _onEmailChanged,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Введите email';
                               }
-                              if (!value.contains('@')) {
+                              if (!_isValidEmail(value)) {
                                 return 'Некорректный email';
                               }
                               return null;
                             },
                           ),
                           if (!_isLogin) ...[
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _usernameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Логин (username)',
-                                border: OutlineInputBorder(),
-                              ),
-                              textInputAction: TextInputAction.next,
-                              validator: (value) {
-                                if (_isLogin) return null;
-                                final v = value?.trim() ?? '';
-                                if (v.isEmpty) return 'Введите логин';
-                                if (v.length < 3) return 'Минимум 3 символа';
-                                if (v.length > 24) return 'Максимум 24 символа';
-                                final ok = RegExp(
-                                  r'^[a-zA-Z0-9_]+$',
-                                ).hasMatch(v);
-                                if (!ok) return 'Только латиница, цифры и _';
-                                return null;
-                              },
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                if (_checkingEmail)
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white70,
+                                    ),
+                                  )
+                                else
+                                  Icon(
+                                    _emailAvailable == true
+                                        ? Icons.check_circle
+                                        : _emailAvailable == false
+                                            ? Icons.error
+                                            : Icons.info_outline,
+                                    size: 16,
+                                    color: _emailAvailable == true
+                                        ? AuthColors.success
+                                        : _emailAvailable == false
+                                            ? AuthColors.danger
+                                            : AuthColors.subtitle,
+                                  ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    _checkingEmail
+                                        ? 'Проверяем email…'
+                                        : _emailAvailable == true
+                                            ? 'Email свободен'
+                                            : _emailAvailable == false
+                                                ? 'Email уже зарегистрирован'
+                                                : 'Введите корректный email',
+                                    style: TextStyle(
+                                      fontFamily: 'Inter',
+                                      fontSize: 12,
+                                      color: _emailAvailable == true
+                                          ? AuthColors.success
+                                          : _emailAvailable == false
+                                              ? AuthColors.danger
+                                              : AuthColors.subtitle,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
-                          const SizedBox(height: 16),
-                          TextFormField(
+                          const SizedBox(height: 12),
+                          AuthTextField(
                             controller: _passwordController,
-                            decoration: const InputDecoration(
-                              labelText: 'Пароль',
-                              border: OutlineInputBorder(),
+                            label: 'Пароль',
+                            hint: 'Введите пароль',
+                            obscureText: _passwordObscured,
+                            enabled: !_loading,
+                            textInputAction: TextInputAction.done,
+                            onFieldSubmitted: (_) => _loading ? null : _submit(),
+                            onChanged: (v) {
+                              if (_isLogin) return;
+                              setState(() => _passwordDraft = v);
+                            },
+                            suffixIcon: IconButton(
+                              tooltip:
+                                  _passwordObscured ? 'Показать пароль' : 'Скрыть пароль',
+                              onPressed: _loading
+                                  ? null
+                                  : () => setState(
+                                        () => _passwordObscured = !_passwordObscured,
+                                      ),
+                              icon: Icon(
+                                _passwordObscured
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                                color: Colors.white70,
+                              ),
                             ),
-                            obscureText: true,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
                                 return 'Введите пароль';
                               }
-                              if (value.length < 6) {
-                                return 'Минимум 6 символов';
-                              }
-                              return null;
+                              return _isLogin ? null : _validatePassword(value);
                             },
                           ),
-                          const SizedBox(height: 24),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                              onPressed: _loading ? null : _submit,
-                              child: _loading
-                                  ? const SizedBox(
-                                      height: 20,
-                                      width: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Text(
-                                      _isLogin ? 'Войти' : 'Зарегистрироваться',
-                                    ),
+                          if (!_isLogin) ...[
+                            const SizedBox(height: 10),
+                            _PasswordHint(
+                              okMinLen: _hasMinLen(_passwordDraft),
+                              okAsciiNoSpace: _hasAsciiNoSpace(_passwordDraft),
+                              okComplex: _hasLetter(_passwordDraft) &&
+                                  _hasDigit(_passwordDraft) &&
+                                  _hasSymbol(_passwordDraft),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _isLogin = !_isLogin;
-                                _usernameController.clear();
-                              });
-                            },
-                            child: Text(
-                              _isLogin
-                                  ? 'Нет аккаунта? Зарегистрируйтесь'
-                                  : 'Уже есть аккаунт? Войти',
-                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          AuthPrimaryButton(
+                            label: _isLogin ? 'Войти' : 'Зарегистрироваться',
+                            loading: _loading,
+                            onPressed: _submit,
                           ),
                         ],
                       ),
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  AuthToggle(
+                    isLogin: _isLogin,
+                    disabled: _loading,
+                    onToggle: () {
+                      setState(() {
+                        _isLogin = !_isLogin;
+                        _emailAvailable = null;
+                        _checkingEmail = false;
+                        _passwordDraft = '';
+                        _passwordController.clear();
+                      });
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _PasswordHint extends StatelessWidget {
+  const _PasswordHint({
+    required this.okMinLen,
+    required this.okAsciiNoSpace,
+    required this.okComplex,
+  });
+
+  final bool okMinLen;
+  final bool okAsciiNoSpace;
+  final bool okComplex;
+
+  Widget _row(String text, bool ok) {
+    return Row(
+      children: [
+        Icon(
+          ok ? Icons.check_circle : Icons.circle_outlined,
+          size: 14,
+          color: ok ? Colors.white70 : const Color(0xFF6A6A6A),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              color: ok ? Colors.white70 : const Color(0xFF8C8C8C),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F1F1F),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFF222222)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Пароль должен содержать:',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFFBFC4CE),
+            ),
+          ),
+          const SizedBox(height: 8),
+          _row('Минимум 8 символов', okMinLen),
+          const SizedBox(height: 6),
+          _row('Только латиница/цифры/символы (без пробелов)', okAsciiNoSpace),
+          const SizedBox(height: 6),
+          _row('Буква + цифра + спецсимвол', okComplex),
+        ],
       ),
     );
   }

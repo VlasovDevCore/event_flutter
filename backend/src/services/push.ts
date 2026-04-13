@@ -152,6 +152,15 @@ async function sendToTokens(
   await removeInvalidTokens(toRemove);
 }
 
+function chunk<T>(arr: T[], size: number): T[][] {
+  if (size <= 0) return [arr];
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
+
 export async function notifyDirectMessage(params: {
   recipientUserId: string;
   senderUserId: string;
@@ -218,5 +227,51 @@ export async function notifyEventChatMessage(params: {
         sender_name: senderLabel,
       },
     );
+  }
+}
+
+export async function notifyNewEventCreated(params: {
+  creatorUserId: string;
+  creatorLabel: string;
+  eventId: string;
+  eventTitle: string;
+}): Promise<void> {
+  const { creatorUserId, creatorLabel, eventId, eventTitle } = params;
+
+  const r = await pool.query(
+    `
+    SELECT DISTINCT fr.from_user_id AS user_id
+    FROM friend_requests fr
+    WHERE fr.to_user_id = $1
+      AND fr.from_user_id <> $1
+      AND NOT EXISTS (
+        SELECT 1
+        FROM user_blocks b
+        WHERE (b.blocker_user_id = fr.from_user_id AND b.blocked_user_id = $1)
+           OR (b.blocker_user_id = $1 AND b.blocked_user_id = fr.from_user_id)
+      )
+    `,
+    [creatorUserId],
+  );
+  if (r.rows.length === 0) return;
+
+  const userIds = r.rows.map((row) => row.user_id as string);
+
+  const t = await pool.query(
+    `SELECT token FROM user_push_tokens WHERE user_id = ANY($1::uuid[])`,
+    [userIds],
+  );
+  const tokens = t.rows.map((row) => row.token as string).filter(Boolean);
+  if (tokens.length === 0) return;
+
+  const title = creatorLabel || 'Новая встреча';
+  const body = eventTitle ? `Создал встречу: ${truncateText(eventTitle, 80)}` : 'Создал новую встречу';
+
+  for (const part of chunk(tokens, 500)) {
+    await sendToTokens(part, { title, body }, {
+      type: 'new_event',
+      event_id: eventId,
+      creator_id: creatorUserId,
+    });
   }
 }

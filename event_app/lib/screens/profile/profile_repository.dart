@@ -2,6 +2,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../services/api_client.dart';
 import '../../services/push_notifications_service.dart';
+import '../../models/event.dart';
 import 'profile_achievement.dart';
 import 'profile_models.dart';
 import 'profile_social_models.dart';
@@ -102,5 +103,31 @@ class ProfileRepository {
   static Future<List<ProfileAchievement>> fetchUserAchievements(String userId) async {
     final data = await ApiClient.instance.get('/users/$userId/achievements');
     return ProfileAchievement.listFromApi(data['achievements']);
+  }
+
+  static Future<List<Event>> fetchUserActiveEvents(String userId) async {
+    final data = await ApiClient.instance.get('/users/$userId/active-events');
+    final raw = data['events'];
+    final list = raw is List ? raw : const [];
+    return list
+        .whereType<Map>()
+        .map((e) => Event.fromApiMap(Map<String, dynamic>.from(e)))
+        .toList();
+  }
+
+  static Future<void> reportUser(
+    String userId, {
+    required String category,
+    required String message,
+  }) async {
+    await ApiClient.instance.post(
+      '/reports/user',
+      withAuth: true,
+      body: {
+        'userId': userId,
+        'category': category,
+        'message': message,
+      },
+    );
   }
 }

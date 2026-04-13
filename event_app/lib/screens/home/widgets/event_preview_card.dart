@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-import '../../../config/event_marker_catalog.dart';
 import '../../../models/event.dart';
 import 'event_preview_participants_row.dart';
 import 'preview_participant.dart';
+import '../../auth/verify_email_code_screen.dart';
 
 class EventPreviewCard extends StatelessWidget {
   const EventPreviewCard({
@@ -31,13 +32,9 @@ class EventPreviewCard extends StatelessWidget {
   final VoidCallback onOpenDetails;
   final void Function(int status) onRsvpToggle;
 
-  String _hexColor(Color color) {
-    final value = color.toARGB32() & 0xFFFFFF;
-    return '#${value.toRadixString(16).padLeft(6, '0').toUpperCase()}';
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isVerified = ((Hive.box('authBox').get('status') as int?) ?? 1) != 0;
     return Material(
       color: Colors.transparent,
       child: Container(
@@ -143,7 +140,17 @@ class EventPreviewCard extends StatelessWidget {
                       ),
                       minimumSize: const Size(0, 48),
                     ),
-                    onPressed: () => onRsvpToggle(isGoing ? -1 : 1),
+                    onPressed: () async {
+                      if (!isVerified) {
+                        final nextStatus = isGoing ? -1 : 1;
+                        final verified = await _showVerifyEmailGate(context);
+                        if (verified == true) {
+                          onRsvpToggle(nextStatus);
+                        }
+                        return;
+                      }
+                      onRsvpToggle(isGoing ? -1 : 1);
+                    },
                     child: Text(isGoing ? 'Не приду' : 'Я приду'),
                   ),
                 ),
@@ -169,6 +176,110 @@ class EventPreviewCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<bool?> _showVerifyEmailGate(BuildContext context) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              Center(
+                child: Image.asset(
+                  'assets/avatar/at-dynamic-color.png',
+                  width: 64,
+                  height: 64,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Подтвердите email',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Чтобы отметить участие, сначала подтвердите почту кодом из письма.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  height: 1.35,
+                  color: Color(0xFFAAABB0),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 52,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final ok = await Navigator.of(ctx).push<bool>(
+                      MaterialPageRoute<bool>(
+                        builder: (_) => const VerifyEmailCodeScreen(),
+                      ),
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.of(ctx).pop(ok == true);
+                  },
+                  child: const Text(
+                    'Подтвердить email',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF222222)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Отмена'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

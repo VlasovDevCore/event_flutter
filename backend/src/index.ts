@@ -13,6 +13,7 @@ import blocksRouter from './routes/blocks';
 import friendsRouter from './routes/friends';
 import usersRouter from './routes/users';
 import messagesRouter from './routes/messages';
+import reportsRouter from './routes/reports';
 
 dotenv.config();
 initFirebaseAdmin();
@@ -49,6 +50,7 @@ app.use('/blocks', blocksRouter);
 app.use('/friends', friendsRouter);
 app.use('/users', usersRouter);
 app.use('/messages', messagesRouter);
+app.use('/reports', reportsRouter);
 
 // Always return JSON errors to the mobile app.
 // Otherwise Express default 404/500 responses are HTML and the client fails with FormatException.

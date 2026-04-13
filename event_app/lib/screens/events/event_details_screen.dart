@@ -17,6 +17,8 @@ import '../../widgets/detail/detail_event_header.dart';
 import '../../widgets/detail/detail_creator_card.dart';
 import '../../widgets/detail/detail_attendees_section.dart';
 import '../../widgets/detail/detail_rsvp_section.dart';
+import 'widgets/report_event_sheet.dart';
+import '../auth/verify_email_code_screen.dart';
 
 class EventDetailsScreen extends StatefulWidget {
   const EventDetailsScreen({super.key, required this.event});
@@ -57,6 +59,8 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
   }
 
   bool get _isLoggedIn => Hive.box('authBox').get('token') != null;
+  bool get _isEmailVerified =>
+      ((Hive.box('authBox').get('status') as int?) ?? 1) != 0;
 
   String? _currentUserId() {
     final authBox = Hive.box('authBox');
@@ -674,6 +678,105 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
     final me = _currentUserEmail();
     final goingSelected = me != null && event.goingUsers.contains(me);
 
+    if (_isLoggedIn && !_isEmailVerified) {
+      return Scaffold(
+        backgroundColor: _bg,
+        body: Stack(
+          children: [
+            _buildBackgroundGradient(),
+            SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Center(
+                        child: Image.asset(
+                          'assets/avatar/at-dynamic-color.png',
+                          width: 64,
+                          height: 64,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Text(
+                        'Ваш email не подтверждён',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Чтобы продолжить, подтвердите почту кодом из письма.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 14,
+                          height: 1.35,
+                          color: Color(0xFFAAABB0),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: FilledButton(
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                          ),
+                          onPressed: () async {
+                            final ok = await Navigator.of(context).push<bool>(
+                              MaterialPageRoute<bool>(
+                                builder: (_) => const VerifyEmailCodeScreen(),
+                              ),
+                            );
+                            if (ok == true && mounted) {
+                              setState(() {});
+                            }
+                          },
+                          child: const Text(
+                            'Подтвердить email',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: Colors.white,
+                            side: const BorderSide(color: Color(0xFF222222)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Закрыть'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     // Ищем профиль создателя
     final creatorProfiles = <EventUserProfile>[
       ...event.goingUserProfiles,
@@ -817,6 +920,10 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                                   ),
                                 ),
                               ),
+                              if (_isLoggedIn && !_isCreator(event)) ...[
+                                _buildReportButton(event),
+                                const SizedBox(width: 10),
+                              ],
                               if (_isCreator(event)) _buildEditButton(event),
                             ],
                           ),
@@ -1014,6 +1121,42 @@ class _EventDetailsScreenState extends State<EventDetailsScreen> {
                     color: Colors.white,
                     size: 18,
                   ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildReportButton(Event event) {
+    return Tooltip(
+      message: 'Пожаловаться',
+      child: Container(
+        width: 37,
+        height: 37,
+        decoration: BoxDecoration(
+          color: const Color.fromARGB(157, 0, 0, 0),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () {
+              showReportEventSheet(
+                context,
+                eventId: event.id,
+                eventTitle: event.title,
+              );
+            },
+            splashColor: const Color.fromARGB(157, 0, 0, 0),
+            highlightColor: const Color.fromARGB(157, 0, 0, 0),
+            child: const Center(
+              child: Icon(
+                Icons.flag_outlined,
+                color: Color(0xFFFF5F57),
+                size: 18,
+              ),
+            ),
           ),
         ),
       ),

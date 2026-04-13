@@ -25,6 +25,10 @@ import 'profile_dialogs.dart';
 import 'profile_provider.dart';
 import 'profile_stats_provider.dart';
 import 'profile_achievements_provider.dart';
+import 'widgets/report_user_sheet.dart';
+import 'widgets/profile_active_events_section.dart';
+import '../events/event_details_screen.dart';
+import '../../models/event.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key, this.userId});
@@ -42,6 +46,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   late Future<ProfileRelationship> _relationshipFuture;
   late Future<ProfileBlockStatus> _blockStatusFuture;
   late Future<List<ProfileAchievement>> _otherAchievementsFuture;
+  late Future<List<Event>> _otherActiveEventsFuture;
   /// Один общий future для [FutureBuilder] — нельзя создавать [Future.wait] в [build],
   /// иначе при любом [setState] виджет сбрасывается в loading.
   late Future<List<dynamic>> _otherProfileCombinedFuture;
@@ -50,6 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   ProfileProvider? _profileProvider;
   ProfileStatsProvider? _statsProvider;
   ProfileAchievementsProvider? _achievementsProvider;
+  Future<List<Event>>? _myActiveEventsFuture;
 
   bool _savingProfile = false;
 
@@ -67,6 +73,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _profileProvider = ProfileProvider();
       _statsProvider = ProfileStatsProvider();
       _achievementsProvider = ProfileAchievementsProvider();
+      final myId = Hive.box('authBox').get('userId')?.toString().trim();
+      if (myId != null && myId.isNotEmpty) {
+        _myActiveEventsFuture = ProfileRepository.fetchUserActiveEvents(myId);
+      }
     } else {
       // Для чужого профиля используем Future
       _loadOtherProfileData();
@@ -81,12 +91,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     _otherAchievementsFuture = ProfileRepository.fetchUserAchievements(
       widget.userId!,
     );
+    _otherActiveEventsFuture = ProfileRepository.fetchUserActiveEvents(
+      widget.userId!,
+    );
     _otherProfileCombinedFuture = Future.wait([
       _otherUserFuture,
       _otherStatsFuture,
       _relationshipFuture,
       _blockStatusFuture,
       _otherAchievementsFuture,
+      _otherActiveEventsFuture,
     ]);
   }
 
@@ -144,12 +158,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
       _relationshipFuture = ProfileRepository.fetchRelationship(id);
       _blockStatusFuture = ProfileRepository.fetchBlockStatus(id);
       _otherStatsFuture = ProfileRepository.fetchUserStats(id);
+      _otherActiveEventsFuture = ProfileRepository.fetchUserActiveEvents(id);
       _otherProfileCombinedFuture = Future.wait([
         _otherUserFuture,
         _otherStatsFuture,
         _relationshipFuture,
         _blockStatusFuture,
         _otherAchievementsFuture,
+        _otherActiveEventsFuture,
       ]);
     });
   }
@@ -264,15 +280,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
           );
         }
 
-        return _buildProfileContent(
-          profile: profile,
-          stats: stats,
-          achievements: achievements,
-          isMe: true,
-          isLoadingStats: _statsProvider!.isLoading,
-          isLoadingAchievements: _achievementsProvider!.isLoading,
-          relationship: null,
-          blockStatus: null,
+        final myActiveFuture = _myActiveEventsFuture;
+        if (myActiveFuture == null) {
+          return _buildProfileContent(
+            profile: profile,
+            stats: stats,
+            achievements: achievements,
+            isMe: true,
+            isLoadingStats: _statsProvider!.isLoading,
+            isLoadingAchievements: _achievementsProvider!.isLoading,
+            relationship: null,
+            blockStatus: null,
+            activeEvents: const [],
+          );
+        }
+
+        return FutureBuilder<List<Event>>(
+          future: myActiveFuture,
+          builder: (context, snapshot) {
+            final activeEvents = snapshot.data ?? const <Event>[];
+            return _buildProfileContent(
+              profile: profile,
+              stats: stats,
+              achievements: achievements,
+              isMe: true,
+              isLoadingStats: _statsProvider!.isLoading,
+              isLoadingAchievements: _achievementsProvider!.isLoading,
+              relationship: null,
+              blockStatus: null,
+              activeEvents: activeEvents,
+            );
+          },
         );
       },
     );
@@ -319,12 +357,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
         // 2 - _relationshipFuture
         // 3 - _blockStatusFuture
         // 4 - _otherAchievementsFuture
+        // 5 - _otherActiveEventsFuture
 
         final profile = results[0] as ProfileMe?;
         final stats = results[1] as ProfileStats;
         final relationship = results[2] as ProfileRelationship;
         final blockStatus = results[3] as ProfileBlockStatus;
         final achievements = results[4] as List<ProfileAchievement>;
+        final activeEvents = results[5] as List<Event>;
 
         if (profile == null) {
           return const Center(
@@ -344,6 +384,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           isLoadingAchievements: false,
           relationship: relationship,
           blockStatus: blockStatus,
+          activeEvents: activeEvents,
         );
       },
     );
@@ -358,6 +399,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     required bool isLoadingAchievements,
     ProfileRelationship? relationship,
     ProfileBlockStatus? blockStatus,
+    List<Event>? activeEvents,
   }) {
     final title = (profile.displayName?.isNotEmpty == true)
         ? profile.displayName!
@@ -409,6 +451,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onLogoutPressed: isMe ? _confirmSignOut : null,
               onBlockPressed: !isMe ? _handleBlock : null,
               onUnblockPressed: !isMe ? _handleUnblock : null,
+              onReportPressed: !isMe && widget.userId != null && _isLoggedIn()
+                  ? () {
+                      final title = (profile.displayName?.isNotEmpty == true)
+                          ? profile.displayName!
+                          : (profile.username?.isNotEmpty == true
+                              ? '@${profile.username}'
+                              : 'Пользователь');
+                      showReportUserSheet(
+                        context,
+                        reportedUserId: widget.userId!,
+                        reportedUserTitle: title,
+                      );
+                    }
+                  : null,
               isBlocked: blockStatus?.isBlocked ?? false,
               isSaving: _savingProfile,
             ),
@@ -480,13 +536,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: BlockedCard(
-              isBlocked: blockStatus?.isBlocked ?? false,
-              isBlockedBy: blockStatus?.isBlockedBy ?? false,
+              isBlocked: blockStatus.isBlocked,
+              isBlockedBy: blockStatus.isBlockedBy,
             ),
           ),
           const SizedBox(height: 16),
         ] else ...[
           const SizedBox(height: 16),
+          if (activeEvents != null && activeEvents.isNotEmpty)
+            ProfileActiveEventsSection(
+              events: activeEvents,
+              onEventTap: (event) {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => EventDetailsScreen(event: event),
+                  ),
+                );
+              },
+            ),
           _buildBioSection(profile, isMe),
           const SizedBox(height: 16),
           _buildStatsCards(stats, isLoadingStats),

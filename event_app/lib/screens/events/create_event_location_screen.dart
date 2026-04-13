@@ -6,9 +6,11 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
 import 'package:geolocator/geolocator.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
 import '../../widgets/event_marker_widget.dart';
 import 'search_location_screen.dart';
+import '../auth/verify_email_code_screen.dart';
 
 class CreateEventLocationScreen extends StatefulWidget {
   const CreateEventLocationScreen({super.key, required this.initialCenter});
@@ -28,6 +30,8 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
   Timer? _addressDebounce;
   bool _isLoadingLocation = false;
   LatLng? _userPosition;
+
+  bool get _isVerified => ((Hive.box('authBox').get('status') as int?) ?? 1) != 0;
 
   @override
   void initState() {
@@ -280,8 +284,6 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topPadding = MediaQuery.of(context).padding.top;
-
     final List<Marker> markers = [];
 
     if (_userPosition != null) {
@@ -541,7 +543,14 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
                 child: FilledButton(
                   onPressed: _selected == null
                       ? null
-                      : () => Navigator.of(context).pop(_selected),
+                      : () async {
+                          if (!_isVerified) {
+                            final verified = await _showVerifyEmailGate(context);
+                            if (verified != true) return;
+                          }
+                          if (!context.mounted) return;
+                          Navigator.of(context).pop(_selected);
+                        },
                   style: FilledButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: Colors.black,
@@ -561,6 +570,110 @@ class _CreateEventLocationScreenState extends State<CreateEventLocationScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  Future<bool?> _showVerifyEmailGate(BuildContext context) {
+    return showModalBottomSheet<bool>(
+      context: context,
+      useSafeArea: true,
+      backgroundColor: const Color(0xFF161616),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 56,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2A2A2A),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
+                ),
+              ),
+              Center(
+                child: Image.asset(
+                  'assets/avatar/at-dynamic-color.png',
+                  width: 64,
+                  height: 64,
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Подтвердите email',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Чтобы создать событие, сначала подтвердите почту кодом из письма.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  height: 1.35,
+                  color: Color(0xFFAAABB0),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                height: 52,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final ok = await Navigator.of(ctx).push<bool>(
+                      MaterialPageRoute<bool>(
+                        builder: (_) => const VerifyEmailCodeScreen(),
+                      ),
+                    );
+                    if (!ctx.mounted) return;
+                    Navigator.of(ctx).pop(ok == true);
+                  },
+                  child: const Text(
+                    'Подтвердить email',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: const BorderSide(color: Color(0xFF222222)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Отмена'),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

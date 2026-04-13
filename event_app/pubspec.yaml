@@ -93,6 +93,7 @@ flutter:
   assets:
     - assets/avatar/left_raounded.svg
     - assets/avatar/right_rounded.svg
+    - assets/avatar/at-dynamic-color.png
     - assets/achievements/
     - assets/events/
     - assets/friends/

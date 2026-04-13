@@ -4,6 +4,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../services/api_client.dart';
+import '../auth/verify_email_code_screen.dart';
 import 'profile_edit_logic.dart';
 import 'profile_models.dart';
 import 'widgets/birth_date_numeric_sheet.dart';
@@ -47,6 +48,18 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
   bool? _usernameAvailable;
   final String _originalUsername =
       Hive.box('authBox').get('username') as String? ?? '';
+
+  Future<void> _openVerifyEmail() async {
+    final ok = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => const VerifyEmailCodeScreen()),
+    );
+    if (!mounted) return;
+    if (ok == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Email подтверждён')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -454,6 +467,95 @@ class _ProfileEditScreenState extends State<ProfileEditScreen> {
                               value:
                                   Hive.box('authBox').get('email') as String? ??
                                   '',
+                            ),
+                            ValueListenableBuilder(
+                              valueListenable: Hive.box('authBox').listenable(
+                                keys: const ['status', 'email'],
+                              ),
+                              builder: (context, box, _) {
+                                final status = box.get('status');
+                                final isVerified = status == 1 || status == true;
+                                if (isVerified) return const SizedBox.shrink();
+
+                                final email = (box.get('email') as String?) ?? '';
+                                return Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: Container(
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF171717),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: const Color(0xFF2A2A2A),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Padding(
+                                          padding: EdgeInsets.only(top: 2),
+                                          child: Icon(
+                                            Icons.info_outline,
+                                            color: Color(0xFFFFC247),
+                                            size: 18,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'Email не подтверждён',
+                                                style: TextStyle(
+                                                  color: Colors.white,
+                                                  fontWeight: FontWeight.w700,
+                                                  fontSize: 14,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                email.isEmpty
+                                                    ? 'Подтвердите email, чтобы пользоваться всеми функциями.'
+                                                    : 'Подтвердите $email, чтобы пользоваться всеми функциями.',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFBDBDBD),
+                                                  fontSize: 12,
+                                                  height: 1.3,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              SizedBox(
+                                                height: 40,
+                                                child: FilledButton(
+                                                  style: FilledButton.styleFrom(
+                                                    backgroundColor:
+                                                        const Color(0xFF2B2B2B),
+                                                    foregroundColor: Colors.white,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                        12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  onPressed: _openVerifyEmail,
+                                                  child: const Text(
+                                                    'Подтвердить email',
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
                             ),
                             const SizedBox(height: 16),
 

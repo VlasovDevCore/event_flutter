@@ -12,6 +12,7 @@ import '../models/event.dart';
 import '../navigation/app_navigator.dart';
 import '../screens/chat/direct_chat_screen.dart';
 import '../screens/chat/event_chat_screen.dart';
+import '../screens/events/event_details_screen.dart';
 import 'api_client.dart';
 import 'chat_presence_tracker.dart';
 
@@ -31,6 +32,20 @@ Future<void> _openEventChatFromId(String eventId) async {
     await nav.push(
       MaterialPageRoute<void>(
         builder: (_) => EventChatScreen(event: event),
+      ),
+    );
+  } catch (_) {}
+}
+
+Future<void> _openEventDetailsFromId(String eventId) async {
+  try {
+    final data = await ApiClient.instance.get('/events/$eventId', withAuth: true);
+    final event = Event.fromApiMap(data);
+    final nav = appNavigatorKey.currentState;
+    if (nav == null) return;
+    await nav.push(
+      MaterialPageRoute<void>(
+        builder: (_) => EventDetailsScreen(event: event),
       ),
     );
   } catch (_) {}
@@ -58,6 +73,10 @@ void _handleOpenFromData(Map<String, dynamic> data) {
     final eventId = data['event_id']?.toString();
     if (eventId == null || eventId.isEmpty) return;
     unawaited(_openEventChatFromId(eventId));
+  } else if (type == 'new_event') {
+    final eventId = data['event_id']?.toString();
+    if (eventId == null || eventId.isEmpty) return;
+    unawaited(_openEventDetailsFromId(eventId));
   }
 }
 

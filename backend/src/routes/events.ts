@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs';
 import { pool } from '../db';
 import { authMiddleware, AuthRequest, optionalAuthMiddleware } from '../middleware/auth';
-import { notifyEventChatMessage } from '../services/push';
+import { notifyEventChatMessage, notifyNewEventCreated } from '../services/push';
 import { decryptMessageText, encryptMessageText } from '../utils/messageCrypto';
 
 const router = Router();
@@ -1576,6 +1576,19 @@ router.post('/', authMiddleware, async (req: AuthRequest, res) => {
         created.created_by_username = creator.username;
         created.created_by_display_name = creator.display_name;
       }
+    }
+    if (creatorUserId && created?.id) {
+      const label =
+        (created.created_by_display_name as string | null | undefined) ||
+        (created.created_by_username as string | null | undefined) ||
+        (created.created_by_email as string | null | undefined) ||
+        '';
+      void notifyNewEventCreated({
+        creatorUserId,
+        creatorLabel: String(label ?? '').trim() || 'Пользователь',
+        eventId: String(created.id),
+        eventTitle: String(created.title ?? ''),
+      });
     }
     // eslint-disable-next-line no-console
     console.log('POST /events created:', created);
